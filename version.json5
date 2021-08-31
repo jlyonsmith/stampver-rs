@@ -1,0 +1,67 @@
+{
+  vars: {
+    major: 1,
+    minor: 0,
+    patch: 0,
+    build: 20210829,
+    revision: 1,
+    tz: 'America/Los_Angeles',
+  },
+  calcVars: {
+    nextBuild: '{now.year * 10000 + now.month * 100 + now.day}',
+  },
+  operations: {
+    incrMajor: '{major += 1; minor = 0; patch = 0; revision = 0; build = nextBuild}',
+    incrMinor: '{minor += 1; patch = 0; revision = 0; build = nextBuild}',
+    incrPatch: '{patch += 1; revision = 0; build = nextBuild}',
+    incrRevision: '{revision += 1; build = nextBuild}',
+  },
+  targets: [
+    {
+      description: 'Cargo Package',
+      files: [
+        'Cargo.toml',
+      ],
+      action: {
+        updates: [
+          {
+            search: '^(?<begin>version\\s*=\\s*")\\d+\\.\\d+\\.\\d+(?<end>"\\s*)$',
+            replace: '{`${begin}${major}.${minor}.${patch}${end}`}',
+          },
+        ],
+      },
+    },
+    {
+      description: 'Rust Clap Version',
+      files: [
+        'src/bin/stampver.rs',
+      ],
+      action: {
+        updates: [
+          {
+            search: '^(?<begin>\\s+\\.version\\(")\\d+\\.\\d+\\.\\d+\\+\\d+\\.\\d+(?<end>"\\))$',
+            replace: '{`${begin}${major}.${minor}.${patch}+${build}.${revision}${end}`}',
+          },
+        ],
+      },
+    },
+    {
+      description: 'Git Tag Name',
+      files: [
+        'scratch/version.tag.txt',
+      ],
+      action: {
+        write: '{`${major}.${minor}.${patch}`}',
+      },
+    },
+    {
+      description: 'Git Tag Description',
+      files: [
+        'scratch/version.desc.txt',
+      ],
+      action: {
+        write: '{`Version ${major}.${minor}.${patch}+${build}.${revision}`}',
+      },
+    },
+  ],
+}
