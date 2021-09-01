@@ -53,7 +53,8 @@ pub fn run(operation: &str, input_file: Option<&str>, update: bool) -> Result<()
         _ => panic!("Need to search for version file"),
     };
 
-    let version_info = read_version_file(&mut File::open(&version_file)?)?;
+    let mut content = std::fs::read_to_string(&version_file)?;
+    let version_info = json5::from_str::<VersionInfo>(&content)?;
     let mut context = create_run_context(&version_info)?;
 
     run_operation(operation, &version_info, &mut context)?;
@@ -64,6 +65,14 @@ pub fn run(operation: &str, input_file: Option<&str>, update: bool) -> Result<()
         update,
         &mut context,
     )?;
+
+    content = update_version_content(content, &version_info.vars, &context)?;
+
+    if update {
+        std::fs::write(&version_file, content)?;
+    } else {
+        println!("{}", content)
+    }
 
     Ok(())
 }

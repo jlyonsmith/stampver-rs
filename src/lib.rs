@@ -11,8 +11,8 @@ use std::path::Path;
 
 #[derive(Deserialize, PartialEq, Debug)]
 pub struct Replacement {
-  search: String,
-  replace: String,
+  pub search: String,
+  pub replace: String,
 }
 
 #[derive(Deserialize, PartialEq, Debug)]
@@ -51,28 +51,18 @@ pub enum Action {
 
 #[derive(Deserialize, PartialEq, Debug)]
 pub struct VersionTarget {
-  description: String,
-  files: Vec<String>,
-  action: Action,
+  pub description: String,
+  pub files: Vec<String>,
+  pub action: Action,
 }
 
 #[derive(Deserialize, PartialEq, Debug)]
 pub struct VersionInfo {
-  vars: HashMap<String, VarType>,
+  pub vars: HashMap<String, VarType>,
   #[serde(rename = "calcVars")]
-  calc_vars: HashMap<String, String>,
-  operations: HashMap<String, String>,
-  targets: Vec<VersionTarget>,
-}
-
-pub fn read_version_file(reader: &mut dyn Read) -> Result<VersionInfo, Box<dyn Error>> {
-  let mut content = String::new();
-
-  reader.read_to_string(&mut content)?;
-
-  let version_info = json5::from_str::<VersionInfo>(&content)?;
-
-  Ok(version_info)
+  pub calc_vars: HashMap<String, String>,
+  pub operations: HashMap<String, String>,
+  pub targets: Vec<VersionTarget>,
 }
 
 pub fn create_run_context(version_info: &VersionInfo) -> Result<HashMapContext, Box<dyn Error>> {
@@ -202,15 +192,37 @@ pub fn process_targets(
   Ok(())
 }
 
-pub fn update_version_info(
-  version_file: &Path,
+pub fn update_version_content(
+  content: String,
+  vars: &HashMap<String, VarType>,
   context: &HashMapContext,
-) -> Result<(), Box<dyn Error>> {
-  let contents = std::fs::read_to_string(&version_file)?;
+) -> Result<String, Box<dyn Error>> {
+  let mut new_content = content;
 
-  std::fs::write(&version_file, contents)?;
+  for (identifier, _) in vars.iter() {
+    if let Some(value) = context.get_value(identifier) {
+      let s = match value {
+        Value::String(s) => format!("\"{}\"", s),
+        Value::Float(f) => format!("{}", f),
+        Value::Boolean(b) => format!("{}", b),
+        Value::Int(n) => format!("{}", n),
+        _ => "".to_string(),
+      };
+      let re = RegexBuilder::new(
+        &("(?P<begin>vars:\\s*\\{\n(?:.*\n)*?\\s*".to_string()
+          + &identifier
+          + "\\s*:\\s).*?(?P<end>\\s*,.*?\n)"),
+      )
+      .multi_line(true)
+      .build()?;
 
-  Ok(())
+      new_content = re
+        .replace(&new_content, "${begin}".to_string() + &s + "${end}")
+        .into_owned();
+    }
+  }
+
+  Ok(new_content)
 }
 
 #[cfg(test)]
