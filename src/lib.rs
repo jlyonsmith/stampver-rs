@@ -1,13 +1,16 @@
 //! Update version information in project files
 
+use chrono::prelude::*;
+use evalexpr::*;
+use regex::{Captures, RegexBuilder};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::error::Error;
-use std::fs::read_to_string;
-use std::io::{Read, Write};
+use std::io::Read;
+use std::path::Path;
 
 #[derive(Deserialize, PartialEq, Debug)]
-pub struct UpdateAction {
+pub struct Replacement {
   search: String,
   replace: String,
 }
@@ -20,10 +23,26 @@ pub enum VarType {
   Number(f64),
 }
 
+impl VarType {
+  fn as_expr_value(self: &Self) -> Value {
+    match self {
+      VarType::Bool(b) => Value::Boolean(*b),
+      VarType::String(s) => Value::String((*s).to_owned()),
+      VarType::Number(n) => {
+        if n.fract() == 0_f64 {
+          Value::Int(*n as i64)
+        } else {
+          Value::Float(*n)
+        }
+      }
+    }
+  }
+}
+
 #[derive(Deserialize, PartialEq, Debug)]
 pub enum Action {
   #[serde(rename = "updates")]
-  Update(Vec<UpdateAction>),
+  Update(Vec<Replacement>),
   #[serde(rename = "write")]
   Write(String),
   #[serde(rename = "copyFrom")]
@@ -46,12 +65,150 @@ pub struct VersionInfo {
   targets: Vec<VersionTarget>,
 }
 
-pub fn read_version_file(reader: &mut dyn Read) -> Result<(), Box<dyn Error>> {
+pub fn read_version_file(reader: &mut dyn Read) -> Result<VersionInfo, Box<dyn Error>> {
   let mut content = String::new();
 
   reader.read_to_string(&mut content)?;
 
-  json5::from_str::<VersionInfo>(&content)?;
+  let version_info = json5::from_str::<VersionInfo>(&content)?;
+
+  Ok(version_info)
+}
+
+pub fn create_run_context(version_info: &VersionInfo) -> Result<HashMapContext, Box<dyn Error>> {
+  let mut context = HashMapContext::new();
+
+  // Add all fixed vars into the context
+  for (identifier, value) in version_info.vars.iter() {
+    context.set_value(identifier.to_string(), value.as_expr_value())?;
+  }
+
+  let now: DateTime<Utc> = Utc::now();
+
+  context.set_value(
+    "now::year".to_owned(),
+    Value::from(i64::from(now.date().year())),
+  )?;
+  context.set_value(
+    "now::month".to_owned(),
+    Value::from(i64::from(now.date().month())),
+  )?;
+  context.set_value(
+    "now::day".to_owned(),
+    Value::from(i64::from(now.date().day())),
+  )?;
+
+  // Evaluate the calculated vars
+  for (identifier, value) in version_info.calc_vars.iter() {
+    context.set_value(
+      identifier.to_string(),
+      evalexpr::eval_with_context(&value, &context)?,
+    )?;
+  }
+
+  Ok(context)
+}
+
+pub fn run_operation(
+  operation: &str,
+  version_info: &VersionInfo,
+  context: &mut HashMapContext,
+) -> Result<(), Box<dyn Error>> {
+  if let Some(value) = version_info.operations.get(operation) {
+    eprintln!("Running operation '{}'", operation);
+    eval_with_context_mut(&value, context)?;
+  } else {
+    eprintln!("No operation named '{}' was found", operation);
+  }
+
+  Ok(())
+}
+
+pub fn process_targets(
+  version_file_dir: &Path,
+  version_info: &VersionInfo,
+  update: bool,
+  context: &mut HashMapContext,
+) -> Result<(), Box<dyn Error>> {
+  for target in version_info.targets.iter() {
+    for target_file in target.files.iter() {
+      let target_file = version_file_dir.join(target_file);
+
+      eprintln!("  {} ({})", target_file.display(), target.description);
+
+      match &target.action {
+        Action::Update(replacements) => {
+          let mut content = std::fs::read_to_string(&target_file)?;
+
+          for replacement in replacements.iter() {
+            let re = RegexBuilder::new(&replacement.search)
+              .multi_line(true)
+              .build()?;
+            let replace_str = &replacement.replace;
+            let mut found = false;
+
+            content = re
+              .replace_all(&content, |caps: &Captures| {
+                found = true;
+
+                if let Some(m) = caps.name("begin") {
+                  context
+                    .set_value("begin".to_owned(), Value::from(m.as_str()))
+                    .unwrap();
+                }
+                if let Some(m) = caps.name("end") {
+                  context
+                    .set_value("end".to_owned(), Value::from(m.as_str()))
+                    .unwrap();
+                }
+                eval_string_with_context(replace_str, context).unwrap()
+              })
+              .into_owned();
+
+            if !found {
+              eprint!(
+                "Search/replace on '{}' did not match anything; check your search string '{}'",
+                target_file.display(),
+                replacement.search
+              )
+            }
+          }
+
+          if update {
+            std::fs::write(&target_file, content)?;
+          }
+
+          ()
+        }
+        Action::CopyFrom(from_file) => {
+          if update {
+            std::fs::copy(&from_file, &target_file)?;
+          }
+          ()
+        }
+        Action::Write(file_content) => {
+          if update {
+            std::fs::write(
+              &target_file,
+              eval_string_with_context(&file_content, context)?,
+            )?;
+          }
+          ()
+        }
+      };
+    }
+  }
+
+  Ok(())
+}
+
+pub fn update_version_info(
+  version_file: &Path,
+  context: &HashMapContext,
+) -> Result<(), Box<dyn Error>> {
+  let contents = std::fs::read_to_string(&version_file)?;
+
+  std::fs::write(&version_file, contents)?;
 
   Ok(())
 }

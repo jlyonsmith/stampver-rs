@@ -1,9 +1,7 @@
-use clap::{arg_enum, value_t, App, Arg};
+use clap::{App, Arg};
 use stampver::*;
 use std::error::Error;
 use std::fs::File;
-use std::io::{BufReader, BufWriter};
-use std::io::{Seek, SeekFrom, Write};
 use std::path::Path;
 
 // {grcov-excl-start}
@@ -49,14 +47,24 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 // {grcov-excl-end}
 
-pub fn run(
-    operation: &str,
-    input_file: Option<&str>,
-    round_down: bool,
-) -> Result<(), Box<dyn Error>> {
-    if let Some(input_file) = input_file {
-        read_version_file(&mut File::open(Path::new(input_file))?)?;
-    }
+pub fn run(operation: &str, input_file: Option<&str>, update: bool) -> Result<(), Box<dyn Error>> {
+    let version_file = match input_file {
+        Some(input_file) => Path::new(input_file).canonicalize()?,
+        _ => panic!("Need to search for version file"),
+    };
+
+    let version_info = read_version_file(&mut File::open(&version_file)?)?;
+    let mut context = create_run_context(&version_info)?;
+
+    run_operation(operation, &version_info, &mut context)?;
+
+    process_targets(
+        &version_file.parent().unwrap(),
+        &version_info,
+        update,
+        &mut context,
+    )?;
+
     Ok(())
 }
 

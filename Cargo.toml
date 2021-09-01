@@ -21,7 +21,9 @@ cli = ["clap"]
 clap = { version = "^2.33.3", optional = true }
 serde = { version = "^1.0.117", features = ["derive"] }
 json5 = "^0.3.0"
-utf8-decode = "^1.0"
+evalexpr = "^6.5.0"
+chrono = "0.4.19"
+regex = "^1"
 
 [dev-dependencies]
 tempfile = "^3.2"
