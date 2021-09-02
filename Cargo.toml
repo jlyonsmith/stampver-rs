@@ -23,7 +23,8 @@ serde = { version = "^1.0.117", features = ["derive"] }
 json5 = "^0.3.0"
 evalexpr = "^6.5.0"
 chrono = "0.4.19"
-regex = "^1"
+regex = "^1.5.4"
+walkdir = "^2.3.2"
 
 [dev-dependencies]
 tempfile = "^3.2"

@@ -6,7 +6,6 @@ use regex::{Captures, RegexBuilder};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::error::Error;
-use std::io::Read;
 use std::path::Path;
 
 #[derive(Deserialize, PartialEq, Debug)]
@@ -86,6 +85,24 @@ pub fn create_run_context(version_info: &VersionInfo) -> Result<HashMapContext, 
   context.set_value(
     "now::day".to_owned(),
     Value::from(i64::from(now.date().day())),
+  )?;
+  context.set_function(
+    "if".to_owned(),
+    Function::new(|arg| {
+      if let Ok(tuple) = arg.as_tuple() {
+        if let Value::Boolean(b) = tuple[0] {
+          if b {
+            Ok(tuple[1].clone())
+          } else {
+            Ok(tuple[2].clone())
+          }
+        } else {
+          Err(EvalexprError::expected_boolean(tuple[0].clone()))
+        }
+      } else {
+        Err(EvalexprError::expected_tuple(arg.clone()))
+      }
+    }),
   )?;
 
   // Evaluate the calculated vars
@@ -170,8 +187,12 @@ pub fn process_targets(
 
           ()
         }
-        Action::CopyFrom(from_file) => {
+        Action::CopyFrom(from_expr) => {
           if update {
+            let s = eval_string_with_context(from_expr, context)?;
+            let from_file = version_file_dir.join(s);
+
+            println!("{} -> {}", from_file.display(), target_file.display());
             std::fs::copy(&from_file, &target_file)?;
           }
           ()
@@ -275,8 +296,8 @@ mod tests {
     },
   ],
 }
-    "##.as_bytes();
+    "##;
 
-    assert_eq!((), read_version_file(&mut input).unwrap());
+    let version_info = json5::from_str::<VersionInfo>(&input);
   }
 }

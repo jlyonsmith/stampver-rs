@@ -1,11 +1,11 @@
 use clap::{App, Arg};
 use stampver::*;
 use std::error::Error;
-use std::fs::File;
 use std::path::Path;
+use walkdir::WalkDir;
 
 // {grcov-excl-start}
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() {
     let matches = App::new("StampVer")
         .version("1.0.0+20210829.1")
         .author("John Lyon-Smith")
@@ -41,16 +41,37 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     if let Err(ref err) = result {
         eprintln!("error: {}", err);
+        std::process::exit(-1);
     }
-
-    result
 }
 // {grcov-excl-end}
 
 pub fn run(operation: &str, input_file: Option<&str>, update: bool) -> Result<(), Box<dyn Error>> {
     let version_file = match input_file {
         Some(input_file) => Path::new(input_file).canonicalize()?,
-        _ => panic!("Need to search for version file"),
+        None => {
+            let mut path = None;
+
+            for entry in WalkDir::new(".").contents_first(true) {
+                if let Ok(entry) = entry {
+                    if entry.file_type().is_file()
+                        && entry
+                            .file_name()
+                            .to_str()
+                            .map(|s| s.starts_with("version.json"))
+                            .unwrap_or(false)
+                    {
+                        path = Some(Path::new(entry.path()).to_path_buf());
+                        break;
+                    }
+                }
+            }
+            if path.is_none() {
+                panic!("No version.json file found");
+            }
+
+            path.unwrap()
+        }
     };
 
     let mut content = std::fs::read_to_string(&version_file)?;
