@@ -398,7 +398,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "stampver-rs"
+name = "stampver"
 version = "1.0.0"
 dependencies = [
  "chrono",

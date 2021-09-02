@@ -1,5 +1,5 @@
 [package]
-name = "stampver-rs"
+name = "stampver"
 version = "1.0.0"
 edition = "2018"
 authors = ["John Lyon-Smith <john@lyon-smith.org>"]
