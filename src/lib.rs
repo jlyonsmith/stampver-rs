@@ -1,6 +1,7 @@
 //! Update version information in project files
 
 use chrono::prelude::*;
+use colored::Colorize;
 use evalexpr::*;
 use regex::{Captures, RegexBuilder};
 use serde::Deserialize;
@@ -122,10 +123,10 @@ pub fn run_operation(
   context: &mut HashMapContext,
 ) -> Result<(), Box<dyn Error>> {
   if let Some(value) = version_info.operations.get(operation) {
-    eprintln!("Running operation '{}'", operation);
+    eprintln!("{} {}", "Operation".bold().green(), operation);
     eval_with_context_mut(&value, context)?;
   } else {
-    eprintln!("No operation named '{}' was found", operation);
+    eprintln!("No operation named {} was found", operation.bright_blue());
   }
 
   Ok(())
@@ -140,8 +141,7 @@ pub fn process_targets(
   for target in version_info.targets.iter() {
     for target_file in target.files.iter() {
       let target_file = version_file_dir.join(target_file);
-
-      eprintln!("  {} ({})", target_file.display(), target.description);
+      let mut action = "".to_string();
 
       match &target.action {
         Action::Update(replacements) => {
@@ -183,6 +183,9 @@ pub fn process_targets(
 
           if update {
             std::fs::write(&target_file, content)?;
+            action += "Updated";
+          } else {
+            action += "Would update";
           }
 
           ()
@@ -192,8 +195,10 @@ pub fn process_targets(
             let s = eval_string_with_context(from_expr, context)?;
             let from_file = version_file_dir.join(s);
 
-            println!("{} -> {}", from_file.display(), target_file.display());
             std::fs::copy(&from_file, &target_file)?;
+            action += "Copied";
+          } else {
+            action += "Would copy"
           }
           ()
         }
@@ -203,10 +208,20 @@ pub fn process_targets(
               &target_file,
               eval_string_with_context(&file_content, context)?,
             )?;
+            action += "Wrote";
+          } else {
+            action += "Would write";
           }
           ()
         }
       };
+
+      eprintln!(
+        "{} {} {}",
+        action.bold().green(),
+        target.description,
+        target_file.display().to_string().bright_blue()
+      );
     }
   }
 
@@ -255,48 +270,74 @@ mod tests {
     let mut input = r##"
 {
   vars: {
-    major: 1,
-    debug: true,
+    major: 3,
+    minor: 0,
+    patch: 0,
+    build: 20210902,
+    revision: 0,
     tz: "America/Los_Angeles",
+    sequence: 6,
+    buildType: "test",
   },
   calcVars: {
-    nextBuild: "year * 10000",
+    nextBuild: "now::year * 10000 + now::month * 100 + now::day",
+    nextSequence: "sequence + 1",
   },
   operations: {
-    incrMajor: "major += 1",
+    incrMajor: "major += 1; minor = 0; patch = 0; revision = 0; build = nextBuild",
+    incrMinor: "minor += 1; patch = 0; revision = 0; build = nextBuild",
+    incrPatch: "patch += 1; revision = 0; build = nextBuild",
+    incrRevision: "revision += 1; build = nextBuild",
+    incrSequence: "sequence += 1",
+    setBetaBuild: 'buildType = "beta"',
+    setProdBuild: 'buildType = "prod"',
   },
   targets: [
+    {
+      description: "NodeJS package file",
+      files: ["package.json"],
+      action: {
+        updates: [
+          {
+            search: '^(?P<begin>\\s*"version"\\s*:\\s*")\\d+\\.\\d+\\.\\d+(?P<end>")',
+            replace: 'begin + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + end',
+          },
+        ],
+      },
+    },
     {
       description: "TypeScript version",
       files: ["src/version.ts"],
       action: {
         updates: [
           {
-            search: '^(?<begin>\\s*export\\s*const\\s*version\\s*=\\s*")\\d+\\.\\d+\\.\\d+(?<end>"\\s*)$',
-            replace: "${begin}${major}.${minor}.${patch}${end}",
+            search: '^(?P<begin>\\s*export\\s*const\\s*version\\s*=\\s*")\\d+\\.\\d+\\.\\d+(?P<end>";?)$',
+            replace: 'begin + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + end',
           },
           {
-            search: '^(?<begin>\\s*export\\s*const\\s*fullVersion\\s*=\\s*")\\d+\\.\\d+\\.\\d+\\+\\d+\\.\\d+(?<end>"\\s*)$',
-            replace: "${begin}${major}.${minor}.${patch}+${build}.${revision}${end}",
+            search: '^(?P<begin>\\s*export\\s*const\\s*fullVersion\\s*=\\s*")\\d+\\.\\d+\\.\\d+\\+\\d+\\.\\d+(?P<end>";?)$',
+            replace: 'begin + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + "+" + str::from(build) + "." + str::from(revision) + end',
           },
         ],
       },
     },
     {
-      description: "Git version tag",
-      files: ["scratch/version.tag.txt"],
-      action: { write: "${major}.${minor}.${patch}" },
+      description: "Git version tag commit message",
+      files: ["scratch/version.desc.txt"],
+      action: {
+        write: '"Version" + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + "+" + str::from(build) + "." + str::from(revision)',
+      },
     },
     {
       description: "Google Firebase",
-      files: ["src/some-file.plist"],
+      files: ["some-file.plist"],
       action: {
-        copyFrom: "('src/some-file${buildType' === 'test' ? '-test' : '-prod') + '.plist'",
+        copyFrom: '"src/some-file" + if(buildType == "test", "-test", "-prod") + ".plist"',
       },
     },
   ],
 }
-    "##;
+"##;
 
     let version_info = json5::from_str::<VersionInfo>(&input);
   }

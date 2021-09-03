@@ -91,8 +91,6 @@ pub fn run(operation: &str, input_file: Option<&str>, update: bool) -> Result<()
 
     if update {
         std::fs::write(&version_file, content)?;
-    } else {
-        println!("{}", content)
     }
 
     Ok(())
