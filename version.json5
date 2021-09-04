@@ -4,7 +4,7 @@
     minor: 1,
     patch: 0,
     build: 20210904,
-    revision: 2,
+    revision: 3,
   },
   calcVars: {
     nextBuild: "now::year * 10000 + now::month * 100 + now::day",
