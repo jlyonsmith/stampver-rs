@@ -65,19 +65,14 @@ The tool will describe the actions that it is taking on each file so you can che
 
 ## Expressions
 
-This package uses the [evalexpr](https://crates.io/crates/evalexpr) to provide the ability to customize the different calculations and operations. `stampver` adds the following variables and functions:
+This package uses the [evalexpr](https://crates.io/crates/evalexpr) to provide the ability to customize the different calculations and operations.  All functions are available as described in the `evalexpr` *except* the `regex` functions. `stampver` adds the following variables/functions:
 
-| Variable   | Type | Purpose                      |
-| ---------- | ---- | ---------------------------- |
-| now::year  | Int  | Current UTC year             |
-| now::month | Int  | Current UTC month            |
-| now::day   | Int  | Current UTC day of the month |
-
-And the following functions:
-
-| Function    | Purpose                                                                  |
-| ----------- | ------------------------------------------------------------------------ |
-| if(a, b, c) | If expression `a` is `true` then the value of `b`, else the value of `c` |
+| Identifier   | Argument Amount | Argument Types  | Description                                                              |
+| ------------ | --------------- | --------------- | ------------------------------------------------------------------------ |
+| `now::year`  | 0               |                 | Current UTC year                                                         |
+| `now::month` | 0               |                 | Current UTC month                                                        |
+| `now::day`   | 0               |                 | Current UTC day of the month                                             |
+| `if`         | 3               | Boolean/Any/Any | If expression `a` is `true` then the value of `b`, else the value of `c` |
 
 `stampver` uses the [Regex](https://crates.io/crates/regex) crate for regular expressions. You can use the amazing [Regex101](https://regex101.com/) site to develop and test your own regular expressions.  Use the PCRE2 flavor of regular expressions for the most compatability with the `Regex` crate.
 

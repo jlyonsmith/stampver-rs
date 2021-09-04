@@ -1,66 +1,57 @@
 {
   vars: {
-    major: 1,
-    minor: 0,
+    major: 0,
+    minor: 1,
     patch: 0,
-    build: 20210829,
-    revision: 1,
-    tz: 'America/Los_Angeles',
+    build: 20210904,
+    revision: 2,
   },
   calcVars: {
-    nextBuild: '{now.year * 10000 + now.month * 100 + now.day}',
+    nextBuild: "now::year * 10000 + now::month * 100 + now::day",
   },
   operations: {
-    incrMajor: '{major += 1; minor = 0; patch = 0; revision = 0; build = nextBuild}',
-    incrMinor: '{minor += 1; patch = 0; revision = 0; build = nextBuild}',
-    incrPatch: '{patch += 1; revision = 0; build = nextBuild}',
-    incrRevision: '{revision += 1; build = nextBuild}',
+    incrMajor: "major += 1; minor = 0; patch = 0; revision = 0; build = nextBuild",
+    incrMinor: "minor += 1; patch = 0; revision = 0; build = nextBuild",
+    incrPatch: "patch += 1; revision = 0; build = nextBuild",
+    incrRevision: "revision += 1; build = nextBuild",
   },
   targets: [
     {
-      description: 'Cargo Package',
-      files: [
-        'Cargo.toml',
-      ],
+      description: "Cargo Package",
+      files: ["Cargo.toml"],
       action: {
         updates: [
           {
-            search: '^(?<begin>version\\s*=\\s*")\\d+\\.\\d+\\.\\d+(?<end>"\\s*)$',
-            replace: '{`${begin}${major}.${minor}.${patch}${end}`}',
+            search: '^(?P<begin>version\\s*=\\s*")\\d+\\.\\d+\\.\\d+(?P<end>"\\s*)$',
+            replace: 'begin + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + end',
           },
         ],
       },
     },
     {
-      description: 'Rust Clap Version',
-      files: [
-        'src/bin/stampver.rs',
-      ],
+      description: "Rust Clap Version",
+      files: ["src/bin/stampver.rs"],
       action: {
         updates: [
           {
-            search: '^(?<begin>\\s+\\.version\\(")\\d+\\.\\d+\\.\\d+\\+\\d+\\.\\d+(?<end>"\\))$',
-            replace: '{`${begin}${major}.${minor}.${patch}+${build}.${revision}${end}`}',
+            search: '^(?P<begin>\\s+\\.version\\(")\\d+\\.\\d+\\.\\d+\\+\\d+\\.\\d+(?P<end>"\\))$',
+            replace: 'begin + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + "+" + str::from(build) + "." + str::from(revision) + end',
           },
         ],
       },
     },
     {
-      description: 'Git Tag Name',
-      files: [
-        'scratch/version.tag.txt',
-      ],
+      description: "Git Tag Name",
+      files: ["scratch/version.tag.txt"],
       action: {
-        write: '{`${major}.${minor}.${patch}`}',
+        write: 'str::from(major) + "." + str::from(minor) + "." + str::from(patch)',
       },
     },
     {
-      description: 'Git Tag Description',
-      files: [
-        'scratch/version.desc.txt',
-      ],
+      description: "Git Tag Description",
+      files: ["scratch/version.desc.txt"],
       action: {
-        write: '{`Version ${major}.${minor}.${patch}+${build}.${revision}`}',
+        write: '"Version " + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + "+" + str::from(build) + "." + str::from(revision)',
       },
     },
   ],

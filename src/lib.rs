@@ -161,6 +161,7 @@ pub fn process_targets(
               .build()?;
             let replace_str = &replacement.replace;
             let mut found = false;
+            let mut bad_replace = false;
 
             content = re
               .replace_all(&content, |caps: &Captures| {
@@ -176,16 +177,35 @@ pub fn process_targets(
                     .set_value("end".to_owned(), Value::from(m.as_str()))
                     .unwrap();
                 }
-                eval_string_with_context(replace_str, context).unwrap()
+                let result = eval_string_with_context(replace_str, context);
+
+                match result {
+                  Ok(s) => s,
+                  Err(_) => {
+                    bad_replace = true;
+                    String::new()
+                  }
+                }
               })
               .into_owned();
 
+            if bad_replace {
+              return Err(From::from(format!(
+                "Replacement string '{}' generated an error",
+                replace_str
+              )));
+            }
+
             if !found {
               eprintln!(
-                "{} Search/replace on {} did not match anything; check your search string {}",
-                "warning:".yellow(),
-                target_file.display().to_string().bright_blue(),
-                replacement.search.bright_blue()
+                "{}",
+                format!(
+                  "'{}' Search/replace on '{}' did not match anything; check your search string '{}'",
+                  "warning:",
+                  target_file.display().to_string(),
+                  replacement.search
+                )
+                .yellow()
               )
             }
           }
