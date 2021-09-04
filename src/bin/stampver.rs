@@ -8,7 +8,7 @@ use walkdir::WalkDir;
 // {grcov-excl-start}
 fn main() {
   let matches = App::new("StampVer")
-    .version("0.1.0+20210904.3")
+    .version("0.1.1+20210904.0")
     .author("John Lyon-Smith")
     .about("Version Update Tool.")
     .arg(
