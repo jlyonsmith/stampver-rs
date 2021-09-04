@@ -126,7 +126,10 @@ pub fn run_operation(
     eprintln!("{} {}", "Operation".bold().green(), operation);
     eval_with_context_mut(&value, context)?;
   } else {
-    eprintln!("No operation named {} was found", operation.bright_blue());
+    return Err(From::from(format!(
+      "No operation named {} was found",
+      operation.bright_blue()
+    )));
   }
 
   Ok(())
@@ -145,7 +148,12 @@ pub fn process_targets(
 
       match &target.action {
         Action::Update(replacements) => {
-          let mut content = std::fs::read_to_string(&target_file)?;
+          let mut content = std::fs::read_to_string(&target_file).map_err(|_| {
+            format!(
+              "{} does not exist or is not readable",
+              target_file.display().to_string().bright_blue()
+            )
+          })?;
 
           for replacement in replacements.iter() {
             let re = RegexBuilder::new(&replacement.search)
@@ -173,10 +181,11 @@ pub fn process_targets(
               .into_owned();
 
             if !found {
-              eprint!(
-                "Search/replace on '{}' did not match anything; check your search string '{}'",
-                target_file.display(),
-                replacement.search
+              eprintln!(
+                "{} Search/replace on {} did not match anything; check your search string {}",
+                "warning:".yellow(),
+                target_file.display().to_string().bright_blue(),
+                replacement.search.bright_blue()
               )
             }
           }
@@ -195,7 +204,13 @@ pub fn process_targets(
             let s = eval_string_with_context(from_expr, context)?;
             let from_file = version_file_dir.join(s);
 
-            std::fs::copy(&from_file, &target_file)?;
+            std::fs::copy(&from_file, &target_file).map_err(|_| {
+              format!(
+                "unable to copy {} to {}",
+                from_file.display().to_string().bright_blue(),
+                target_file.display().to_string().bright_blue(),
+              )
+            })?;
             action += "Copied";
           } else {
             action += "Would copy"
@@ -259,86 +274,4 @@ pub fn update_version_content(
   }
 
   Ok(new_content)
-}
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn test_read_version_file() {
-    let mut input = r##"
-{
-  vars: {
-    major: 3,
-    minor: 0,
-    patch: 0,
-    build: 20210902,
-    revision: 0,
-    tz: "America/Los_Angeles",
-    sequence: 6,
-    buildType: "test",
-  },
-  calcVars: {
-    nextBuild: "now::year * 10000 + now::month * 100 + now::day",
-    nextSequence: "sequence + 1",
-  },
-  operations: {
-    incrMajor: "major += 1; minor = 0; patch = 0; revision = 0; build = nextBuild",
-    incrMinor: "minor += 1; patch = 0; revision = 0; build = nextBuild",
-    incrPatch: "patch += 1; revision = 0; build = nextBuild",
-    incrRevision: "revision += 1; build = nextBuild",
-    incrSequence: "sequence += 1",
-    setBetaBuild: 'buildType = "beta"',
-    setProdBuild: 'buildType = "prod"',
-  },
-  targets: [
-    {
-      description: "NodeJS package file",
-      files: ["package.json"],
-      action: {
-        updates: [
-          {
-            search: '^(?P<begin>\\s*"version"\\s*:\\s*")\\d+\\.\\d+\\.\\d+(?P<end>")',
-            replace: 'begin + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + end',
-          },
-        ],
-      },
-    },
-    {
-      description: "TypeScript version",
-      files: ["src/version.ts"],
-      action: {
-        updates: [
-          {
-            search: '^(?P<begin>\\s*export\\s*const\\s*version\\s*=\\s*")\\d+\\.\\d+\\.\\d+(?P<end>";?)$',
-            replace: 'begin + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + end',
-          },
-          {
-            search: '^(?P<begin>\\s*export\\s*const\\s*fullVersion\\s*=\\s*")\\d+\\.\\d+\\.\\d+\\+\\d+\\.\\d+(?P<end>";?)$',
-            replace: 'begin + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + "+" + str::from(build) + "." + str::from(revision) + end',
-          },
-        ],
-      },
-    },
-    {
-      description: "Git version tag commit message",
-      files: ["scratch/version.desc.txt"],
-      action: {
-        write: '"Version" + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + "+" + str::from(build) + "." + str::from(revision)',
-      },
-    },
-    {
-      description: "Google Firebase",
-      files: ["some-file.plist"],
-      action: {
-        copyFrom: '"src/some-file" + if(buildType == "test", "-test", "-prod") + ".plist"',
-      },
-    },
-  ],
-}
-"##;
-
-    let version_info = json5::from_str::<VersionInfo>(&input);
-  }
 }
