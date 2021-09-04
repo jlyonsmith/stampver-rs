@@ -53,7 +53,7 @@ pub fn run(operation: &str, input_file: Option<&str>, update: bool) -> Result<()
     None => {
       let mut path = None;
 
-      for entry in WalkDir::new(".").contents_first(true) {
+      for entry in WalkDir::new(".") {
         if let Ok(entry) = entry {
           if entry.file_type().is_file()
             && entry

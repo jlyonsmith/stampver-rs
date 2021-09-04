@@ -1,8 +1,8 @@
 # Version Stamping Tool (Rust Edition)
 
 [![coverage](https://shields.io/endpoint?url=https://raw.githubusercontent.com/jlyonsmith/stampver-rs/main/coverage.json)](https://github.com/jlyonsmith/stampver-rs/blob/main/coverage.json)
-[![Crates.io](https://img.shields.io/crates/v/stampver-rs.svg)](https://crates.io/crates/stampver-rs)
-[![Docs.rs](https://docs.rs/stampver-rs/badge.svg)](https://docs.rs/stampver-rs)
+[![Crates.io](https://img.shields.io/crates/v/stampver.svg)](https://crates.io/crates/stampver)
+[![Docs.rs](https://docs.rs/stampver/badge.svg)](https://docs.rs/stampver)
 
 A Rust package and command line tool for updating version information in ANY type of project.
 
