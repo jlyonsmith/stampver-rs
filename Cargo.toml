@@ -1,26 +1,18 @@
 [package]
 name = "stampver"
 version = "0.1.1"
-edition = "2018"
+edition = "2021"
 authors = ["John Lyon-Smith <john@lyon-smith.org>"]
-
 readme = "README.md"
-description = "A tool for updating version numbers in ANY type of project"
+description = "A tool for updating project version numbers"
 repository = "https://github.com/jlyonsmith/stampver-rs"
-
-keywords = ["version"]
+keywords = ["version", "command-line", "development"]
 categories = ["command-line-utilities", "development-tools"]
-
 license = "Unlicense"
 
-[features]
-default = ["cli"]
-cli = ["clap"]
-
 [dependencies]
-clap = { version = "^2.33.3", optional = true }
-serde = { version = "^1.0.117", features = ["derive"] }
-json5 = "^0.3.0"
+clap = { version = "3.0.14", features = ["derive"] }
+json5_nodes = "^0.1"
 evalexpr = "^6.5.0"
 chrono = "0.4.19"
 regex = "^1.5.4"
@@ -30,11 +22,6 @@ colored = "^2.0.0"
 [dev-dependencies]
 tempfile = "^3.2"
 
-[lib]
-name = "stampver"
-path = "src/lib.rs"
-
 [[bin]]
 name = "stampver"
 path = "src/bin/stampver.rs"
-required-features = ["cli"]
