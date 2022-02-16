@@ -1,11 +1,15 @@
 //! Update version information in project files
 
-use chrono::prelude::*;
+//use chrono::prelude::*;
 use core::fmt::Arguments;
 use evalexpr::*;
 use json5_nodes::JsonNode;
-use regex::{Captures, RegexBuilder};
-use std::{collections::HashMap, env::ArgsOs, error::Error, path::PathBuf};
+//use regex::{Captures, RegexBuilder};
+//use std::collections::HashMap;
+use std::env::ArgsOs;
+use std::error::Error;
+use std::path::{Path, PathBuf};
+use walkdir::WalkDir;
 
 use clap::{AppSettings, Parser};
 #[derive(Parser)]
@@ -96,34 +100,38 @@ impl<'a> StampVerTool<'a> {
   fn read_script_file(
     self: &Self,
     input_file: Option<PathBuf>,
-  ) -> Result<(&str, (), String), Box<dyn Error>> {
-    //   let version_file = match input_file {
-    //     Some(input_file) => Path::new(input_file).canonicalize()?,
-    //     None => {
-    //       let mut path = None;
+  ) -> Result<(String, JsonNode, PathBuf), Box<dyn Error>> {
+    let script_file = match input_file {
+      Some(input_file) => input_file.canonicalize()?,
+      None => {
+        // Search for a version file in the current directory
+        let mut path = None;
 
-    //       for entry in WalkDir::new(".") {
-    //         if let Ok(entry) = entry {
-    //           if entry.file_type().is_file()
-    //             && entry
-    //               .file_name()
-    //               .to_str()
-    //               .map(|s| s.starts_with("version.json"))
-    //               .unwrap_or(false)
-    //           {
-    //             path = Some(Path::new(entry.path()).to_path_buf());
-    //             break;
-    //           }
-    //         }
-    //       }
-    //       if path.is_none() {
-    //         return Err(From::from(format!("No version.json file found")));
-    //       }
+        for entry in WalkDir::new(".") {
+          if let Ok(entry) = entry {
+            if entry.file_type().is_file()
+              && entry
+                .file_name()
+                .to_str()
+                .map(|s| s.starts_with("version.json"))
+                .unwrap_or(false)
+            {
+              path = Some(Path::new(entry.path()).to_path_buf());
+              break;
+            }
+          }
+        }
+        match path {
+          None => return Err(From::from(format!("No version.json file found"))),
+          Some(path) => path,
+        }
+      }
+    };
 
-    //       path.unwrap()
-    //     }
-    //   };
-    Ok(("", (), String::new()))
+    let content = std::fs::read_to_string(&script_file)?;
+    let root_node = json5_nodes::parse(&content)?;
+
+    Ok((content, root_node, script_file))
   }
 
   fn create_run_context(node: &JsonNode) -> Result<(), Box<dyn Error>> {
