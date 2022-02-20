@@ -1,5 +1,9 @@
 //! Update version information in project files
 
+mod error;
+
+pub use error::ScriptError;
+
 //use chrono::prelude::*;
 use core::fmt::Arguments;
 use evalexpr::*;
@@ -42,6 +46,12 @@ macro_rules! output {
   };
 }
 
+macro_rules! script_error {
+  ($msg: expr, $node: expr) => {
+    ScriptError::new($msg.to_string(), None, $node.get_location())
+  };
+}
+
 pub struct StampVerTool<'a> {
   log: &'a dyn StampVerLog,
 }
@@ -51,31 +61,25 @@ impl<'a> StampVerTool<'a> {
     StampVerTool { log }
   }
 
-  pub fn run(self: &Self, args: ArgsOs) -> Result<(), Box<dyn Error>> {
+  pub fn run(self: &mut Self, args: ArgsOs) -> Result<(), Box<dyn Error>> {
     #[cfg(windows)]
     ansi_term::enable_ansi_support().ok();
 
     use clap::IntoApp;
-    let matches = Cli::into_app().try_get_matches_from(args)?;
+    let matches = Cli::command().try_get_matches_from(args)?;
 
     if matches.is_present("version") {
-      fn get_version<'a, T: IntoApp>() -> &'a str {
-        <T as IntoApp>::into_app().get_version().unwrap_or("")
-      }
-
-      output!(self.log, "{}", get_version::<Cli>());
+      output!(self.log, "{}", Cli::command().get_version().unwrap_or(""));
       return Ok(());
     }
 
     if matches.is_present("help") {
-      fn get_help<T: IntoApp>() -> String {
-        let mut output = Vec::new();
-        <T as IntoApp>::into_app().write_help(&mut output).unwrap();
-        let output = String::from_utf8(output).unwrap();
-        output
-      }
+      let mut output = Vec::new();
+      let mut cmd = Cli::command();
 
-      output!(self.log, "{}", get_help::<Cli>());
+      cmd.write_help(&mut output).unwrap();
+
+      output!(self.log, "{}", String::from_utf8(output).unwrap());
       return Ok(());
     }
 
@@ -84,7 +88,9 @@ impl<'a> StampVerTool<'a> {
 
     let (content, root_node, script_file) = self.read_script_file(cli.input_file)?;
 
-    //self.validate_script_file(root_node)?;
+    self
+      .validate_script_file(&root_node)
+      .map_err(|e| ScriptError::new(e.message, Some(script_file), e.location))?;
 
     //let (run_context, interpolator) = self.create_run_context(root_node);
 
@@ -132,6 +138,36 @@ impl<'a> StampVerTool<'a> {
     let root_node = json5_nodes::parse(&content)?;
 
     Ok((content, root_node, script_file))
+  }
+
+  fn validate_script_file(self: &Self, root_node: &'a JsonNode) -> Result<(), ScriptError> {
+    if !root_node.is_object() {
+      return Err(script_error!("Node <root> is not an object", root_node));
+    }
+
+    // vars node
+    let vars_node = root_node
+      .get_object_entry("vars")
+      .map_err(|_| script_error!("Must have a vars entry", root_node))?;
+
+    let vars_iter = vars_node
+      .get_object_iter()
+      .map_err(|_| script_error!("vars is not an object", vars_node))?;
+
+    for (key, node) in vars_iter {
+      if key == "tz" && !node.is_string() {
+        return Err(script_error!("'tz' node must be a string", node));
+      } else if !(node.is_string() || node.is_number()) {
+        return Err(script_error!("var node must be a string or a number", node));
+      }
+    }
+
+    let operations_node = root_node.get_object_entry("operations").ok();
+    let targets_node = root_node
+      .get_object_entry("targets")
+      .map_err(|e| script_error!("Must have a targets entry", root_node));
+
+    Ok(())
   }
 
   fn create_run_context(node: &JsonNode) -> Result<(), Box<dyn Error>> {
