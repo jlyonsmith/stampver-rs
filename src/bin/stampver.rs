@@ -1,3 +1,4 @@
+use colored::Colorize;
 use core::fmt::Arguments;
 use stampver::{StampVerLog, StampVerTool};
 
@@ -11,7 +12,10 @@ impl StampVerLogger {
 
 impl StampVerLog for StampVerLogger {
   fn output(self: &Self, args: Arguments) {
-    print!("{}", args);
+    println!("{}", args);
+  }
+  fn warning(self: &Self, args: Arguments) {
+    eprintln!("{}", format!("warning: {}", args).yellow());
   }
 }
 

@@ -1,4 +1,6 @@
-use json5_nodes::Location;
+use evalexpr::*;
+use json5_nodes::{JsonError, Location};
+use std::convert::From;
 use std::error::Error;
 use std::fmt::{self, Display};
 use std::path::PathBuf;
@@ -24,6 +26,23 @@ impl ScriptError {
   }
 }
 
+impl From<JsonError> for ScriptError {
+  fn from(err: JsonError) -> Self {
+    match err {
+      JsonError::Syntax(_, location)
+      | JsonError::NumberFormat(location)
+      | JsonError::NumberRange(location)
+      | JsonError::Unicode(location) => ScriptError::new(err.to_string(), None, location),
+    }
+  }
+}
+
+impl From<EvalexprError> for ScriptError {
+  fn from(err: EvalexprError) -> Self {
+    ScriptError::new(err.to_string(), None, None)
+  }
+}
+
 impl Display for ScriptError {
   fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
     if let Some(file) = &self.script_file {
@@ -44,8 +63,9 @@ impl Display for ScriptError {
 
 impl Error for ScriptError {}
 
-// impl From<ScriptError> for Box<dyn Error> {
-//   fn from(err: ScriptError) -> Self {
-//     Box::new(err)
-//   }
-// }
+#[macro_export]
+macro_rules! script_error {
+  ($msg: expr, $node: expr) => {
+    ScriptError::new($msg.to_string(), None, $node.get_location())
+  };
+}
