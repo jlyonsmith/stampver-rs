@@ -12,7 +12,6 @@ use evalexpr::*;
 use json5_nodes::JsonNode;
 use regex::{Captures, RegexBuilder};
 use std::borrow::Cow;
-use std::env::ArgsOs;
 use std::error::Error;
 use std::ffi::OsStr;
 use std::fs;
@@ -69,7 +68,10 @@ impl<'a> StampVerTool<'a> {
     StampVerTool { log }
   }
 
-  pub fn run(self: &mut Self, args: ArgsOs) -> Result<(), Box<dyn Error>> {
+  pub fn run(
+    self: &mut Self,
+    args: impl IntoIterator<Item = std::ffi::OsString>,
+  ) -> Result<(), Box<dyn Error>> {
     use clap::IntoApp;
     let matches = Cli::command().try_get_matches_from(args)?;
 
@@ -145,7 +147,7 @@ impl<'a> StampVerTool<'a> {
       }
     };
 
-    let content = std::fs::read_to_string(&script_file)?;
+    let content = fs::read_to_string(&script_file)?;
     let root_node = json5_nodes::parse(&content)?;
 
     Ok((content, root_node, script_file))
@@ -160,13 +162,17 @@ impl<'a> StampVerTool<'a> {
     let vars_node = root_node.get_object_entry("vars")?;
     let vars_iter = vars_node.get_object_iter()?;
 
-    for (key, node) in vars_iter {
-      if key == "tz" && !node.is_string() {
-        return Err(script_error!("'tz' node must be a string", node));
-      } else if !(node.is_string() || node.is_integer() || node.is_float()) {
+    for (key, var_node) in vars_iter {
+      if key == "tz" && !var_node.is_string() {
+        return Err(script_error!("'tz' node must be a string", var_node));
+      } else if !(var_node.is_string()
+        || var_node.is_integer()
+        || var_node.is_float()
+        || var_node.is_bool())
+      {
         return Err(script_error!(
-          "'vars' entry must be a string or a number",
-          node
+          format!("'vars' entry must be a string, integer, float or boolean",),
+          var_node
         ));
       }
     }
@@ -190,7 +196,7 @@ impl<'a> StampVerTool<'a> {
     for (key, operation_node) in operations_iter {
       if !operation_node.is_string() {
         return Err(script_error!(
-          format!("'operations' entry '{}' must be a string", key),
+          format!("Operation '{}' must be a string", key),
           operation_node
         ));
       }
@@ -235,10 +241,7 @@ impl<'a> StampVerTool<'a> {
         let updates_iter = updates_node.get_array_iter()?;
 
         if let None = updates_iter.clone().nth(0) {
-          return Err(script_error!(
-            "'updates' entry must not be empty",
-            updates_node
-          ));
+          return Err(script_error!("'updates' must not be empty", updates_node));
         }
 
         for (index, item_node) in updates_iter.enumerate() {
@@ -386,7 +389,14 @@ impl<'a> StampVerTool<'a> {
       Ok(())
     } else {
       Err(script_error!(
-        "An operation must be specified",
+        format!(
+          "Specify a valid operation, one of {}",
+          operations_node
+            .get_object_iter()?
+            .map(|(identifier, _)| format!("'{}'", identifier))
+            .collect::<Vec<_>>()
+            .join(", ")
+        ),
         operations_node
       ))
     }
@@ -410,7 +420,7 @@ impl<'a> StampVerTool<'a> {
         let mut action = "".to_string();
 
         if let Some(updates_node) = updates_node {
-          let mut content = std::fs::read_to_string(&target_file).map_err(|_| {
+          let mut content = fs::read_to_string(&target_file).map_err(|_| {
             script_error!(
               format!(
                 "File '{}' does not exist or is not readable",
@@ -478,7 +488,7 @@ impl<'a> StampVerTool<'a> {
           }
 
           if update {
-            std::fs::write(&target_file, content).map_err(|_| {
+            fs::write(&target_file, content).map_err(|_| {
               script_error!(
                 format!(
                   "Unable to write to file '{}'",
@@ -499,7 +509,7 @@ impl<'a> StampVerTool<'a> {
             let s = eval_string_with_context(&copy_from_str, context)?;
             let from_file = version_file_dir.join(s);
 
-            std::fs::copy(&from_file, &target_file).map_err(|_| {
+            fs::copy(&from_file, &target_file).map_err(|_| {
               script_error!(
                 format!(
                   "unable to copy {} to {}",
@@ -517,7 +527,7 @@ impl<'a> StampVerTool<'a> {
         } else if let Some(write_node) = write_node {
           if update {
             let file_content = write_node.get_string();
-            std::fs::write(
+            fs::write(
               &target_file,
               eval_string_with_context(&file_content, context)?,
             )
@@ -536,7 +546,7 @@ impl<'a> StampVerTool<'a> {
 
         output!(
           self.log,
-          "{} {} '{}'",
+          "{} '{}' -> '{}'",
           action,
           target_node.get_object_entry("description")?.get_string(),
           target_file.display().to_string()
@@ -582,116 +592,140 @@ impl<'a> StampVerTool<'a> {
     }
 
     if update {
-      std::fs::write(&script_file, &new_content)
+      fs::write(&script_file, &new_content)
         .map_err(|err| script_error!(err.to_string(), root_node))?;
     }
 
     Ok(())
   }
+}
 
-  // #[cfg(test)]
-  // mod tests {
-  //   use super::*;
+#[cfg(test)]
+mod tests {
+  use super::*;
 
-  //   #[test]
-  //   fn test_run() {
-  //     let temp_dir = tempfile::tempdir().unwrap();
-  //     let version_file = temp_dir.path().join("version.json5");
-  //     let version_content = r##"
-  // {
-  //   vars: {
-  //     major: 3,
-  //     minor: 0,
-  //     patch: 0,
-  //     build: 20210902,
-  //     revision: 0,
-  //     tz: "America/Los_Angeles",
-  //     sequence: 6,
-  //     buildType: "test",
-  //     pi: 3.14,
-  //     debug: true,
-  //   },
-  //   calcVars: {
-  //     nextBuild: "now::year * 10000 + now::month * 100 + now::day",
-  //     nextSequence: "sequence + 1",
-  //   },
-  //   operations: {
-  //     incrMajor: "major += 1; minor = 0; patch = 0; revision = 0; build = nextBuild",
-  //     incrMinor: "minor += 1; patch = 0; revision = 0; build = nextBuild",
-  //     incrPatch: "patch += 1; revision = 0; build = nextBuild",
-  //     incrRevision: "revision += 1; build = nextBuild",
-  //     incrSequence: "sequence += 1",
-  //     setBetaBuild: 'buildType = "beta"',
-  //     setProdBuild: 'buildType = "prod"',
-  //   },
-  //   targets: [
-  //     {
-  //       description: "NodeJS package file",
-  //       files: ["package.json"],
-  //       action: {
-  //         updates: [
-  //           {
-  //             search: '^(?P<begin>\\s*"version"\\s*:\\s*")\\d+\\.\\d+\\.\\d+(?P<end>")',
-  //             replace: 'begin + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + end',
-  //           },
-  //         ],
-  //       },
-  //     },
-  //     {
-  //       description: "TypeScript version",
-  //       files: ["version.ts"],
-  //       action: {
-  //         updates: [
-  //           {
-  //             search: '^(?P<begin>\\s*export\\s*const\\s*version\\s*=\\s*")\\d+\\.\\d+\\.\\d+(?P<end>";?)$',
-  //             replace: 'begin + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + end',
-  //           },
-  //           {
-  //             search: '^(?P<begin>\\s*export\\s*const\\s*fullVersion\\s*=\\s*")\\d+\\.\\d+\\.\\d+\\+\\d+\\.\\d+(?P<end>";?)$',
-  //             replace: 'begin + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + "+" + str::from(build) + "." + str::from(revision) + end',
-  //           },
-  //         ],
-  //       },
-  //     },
-  //     {
-  //       description: "Git version tag commit message",
-  //       files: ["version.desc.txt"],
-  //       action: {
-  //         write: '"Version" + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + "+" + str::from(build) + "." + str::from(revision)',
-  //       },
-  //     },
-  //     {
-  //       description: "Google Firebase",
-  //       files: ["some-file.plist"],
-  //       action: {
-  //         copyFrom: '"some-file" + if(buildType == "test", "-test", "-prod") + ".plist"',
-  //       },
-  //     },
-  //   ],
-  // }
-  //         "##;
-  //     let package_json_content = r##"
-  // {
-  //   "name": "dummy",
-  //   "version": "0.0.0"
-  // }
-  //     "##;
-  //     let version_ts_content = r##"
-  // export const version = "10.0.0";
-  // export const fullVersion = "10.0.0+20210903.0";
-  //     "##;
+  #[test]
+  fn test_run() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let version_file = temp_dir.path().join("version.json5");
+    let version_content = r##"// Test file
+  {
+    vars: {
+      major: 3,
+      minor: 0,
+      patch: 0,
+      build: 20210902,
+      revision: 0,
+      tz: "America/Los_Angeles",
+      sequence: 6,
+      buildType: "test",
+      pi: 3.14,
+      debug: true,
+    },
+    calcVars: {
+      nextBuild: "now::year * 10000 + now::month * 100 + now::day",
+      nextSequence: "sequence + 1",
+    },
+    operations: {
+      incrMajor: "major += 1; minor = 0; patch = 0; revision = 0; build = nextBuild",
+      incrMinor: "minor += 1; patch = 0; revision = 0; build = nextBuild",
+      incrPatch: "patch += 1; revision = 0; build = nextBuild",
+      incrRevision: "revision += 1; build = nextBuild",
+      incrSequence: "sequence += 1",
+      setBetaBuild: 'buildType = "beta"',
+      setProdBuild: 'buildType = "prod"',
+    },
+    targets: [
+      {
+        description: "NodeJS package file",
+        files: ["package.json"],
+        updates: [
+          {
+            search: '^(?P<begin>\\s*"version"\\s*:\\s*")\\d+\\.\\d+\\.\\d+(?P<end>")',
+            replace: 'begin + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + end',
+          },
+        ],
+      },
+      {
+        description: "TypeScript version",
+        files: ["version.ts"],
+        updates: [
+          {
+            search: '^(?P<begin>\\s*export\\s*const\\s*version\\s*=\\s*")\\d+\\.\\d+\\.\\d+(?P<end>";?)$',
+            replace: 'begin + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + end',
+          },
+          {
+            search: '^(?P<begin>\\s*export\\s*const\\s*fullVersion\\s*=\\s*")\\d+\\.\\d+\\.\\d+\\+\\d+\\.\\d+(?P<end>";?)$',
+            replace: 'begin + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + "+" + str::from(build) + "." + str::from(revision) + end',
+          },
+        ],
+      },
+      {
+        description: "Git version tag commit message",
+        files: ["version.desc.txt"],
+        write: '"Version" + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + "+" + str::from(build) + "." + str::from(revision)',
+      },
+      {
+        description: "Google Firebase",
+        files: ["some-file.plist"],
+        copyFrom: '"some-file" + if(buildType == "test", "-test", "-prod") + ".plist"',
+      },
+    ],
+  }
+          "##;
+    let package_json_content = r##"
+  {
+    "name": "dummy",
+    "version": "0.0.0"
+  }
+      "##;
+    let version_ts_content = r##"
+  export const version = "10.0.0";
+  export const fullVersion = "10.0.0+20210903.0";
+      "##;
 
-  //     std::fs::write(&version_file, &version_content).unwrap();
-  //     std::fs::write(&temp_dir.path().join("package.json"), &package_json_content).unwrap();
-  //     std::fs::write(&temp_dir.path().join("version.ts"), &version_ts_content).unwrap();
-  //     std::fs::write(
-  //       &temp_dir.path().join("some-file-test.plist"),
-  //       "some-file-test",
-  //     )
-  //     .unwrap();
+    fs::write(&version_file, &version_content).unwrap();
+    println!("{}", version_file.display());
+    fs::write(&temp_dir.path().join("package.json"), &package_json_content).unwrap();
+    fs::write(&temp_dir.path().join("version.ts"), &version_ts_content).unwrap();
+    fs::write(
+      &temp_dir.path().join("some-file-test.plist"),
+      "some-file-test",
+    )
+    .unwrap();
 
-  //     run("incrMajor", Some(version_file.to_str().unwrap()), false).unwrap();
-  //     run("incrMajor", Some(version_file.to_str().unwrap()), true).unwrap();
-  //   }
-  // }
+    struct TestLogger;
+
+    impl TestLogger {
+      fn new() -> TestLogger {
+        TestLogger {}
+      }
+    }
+
+    impl StampVerLog for TestLogger {
+      fn output(self: &Self, _args: Arguments) {}
+      fn warning(self: &Self, _args: Arguments) {}
+    }
+
+    let logger = TestLogger::new();
+    let mut tool = StampVerTool::new(&logger);
+    let args1: Vec<std::ffi::OsString> = vec![
+      "".into(),
+      "incrMajor".into(),
+      "-i".into(),
+      version_file.display().to_string().into(),
+    ];
+
+    tool.run(args1).unwrap();
+
+    let args2: Vec<std::ffi::OsString> = vec![
+      "".into(),
+      "incrMajor".into(),
+      "-i".into(),
+      version_file.display().to_string().into(),
+      "-u".into(),
+    ];
+
+    tool.run(args2).unwrap();
+  }
 }

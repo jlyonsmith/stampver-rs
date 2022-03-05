@@ -49,12 +49,11 @@
         "args": [
           "test",
           "--no-run",
-          "--bin=stampver",
           "--package=stampver"
         ],
         "filter": {
           "name": "stampver",
-          "kind": "bin"
+          "kind": "lib"
         }
       },
       "args": [],
