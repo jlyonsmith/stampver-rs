@@ -242,7 +242,9 @@ dependencies = [
 
 [[package]]
 name = "json5_nodes"
-version = "0.1.4"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "376192864664efc01f76c1f015541d13b8fb35e4c53953f9f0ca4fc3c7dde550"
 dependencies = [
  "hashlink",
  "pest",

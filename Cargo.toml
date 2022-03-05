@@ -12,7 +12,7 @@ license = "Unlicense"
 
 [dependencies]
 clap = { version = "3.0.14", features = ["derive"] }
-json5_nodes = { path = "../json5_nodes" }
+json5_nodes = "^2.0.0"
 evalexpr = "^7.0.1"
 chrono = "0.4.19"
 regex = "^1.5.4"
