@@ -90,6 +90,7 @@ Here's an annotated schema file format:
     revision: 0,
     sequence: 6,
     buildType: "test",
+    debug: true,
   },
   calcVars: {
     nextBuild: "now::year * 10000 + now::month * 100 + now::day",
@@ -108,32 +109,26 @@ Here's an annotated schema file format:
     {
       description: "JavaScript Files",
       files: ["src/version.js"],
-      action: {
-        updates: [
-          {
-            search: '^(?P<begin>\\s*export\\s*const\\s*version\\s*=\\s*")\\d+\\.\\d+\\.\\d+(?P<end>";?)$',
-            replace: 'begin + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + end',
-          },
-          {
-            search: '^(?P<begin>\\s*export\\s*const\\s*fullVersion\\s*=\\s*")\\d+\\.\\d+\\.\\d+\\+\\d+\\.\\d+(?P<end>";?)$',
-            replace: 'begin + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + "+" + str::from(build) + "." + str::from(revision) + end',
-          },
-        ],
-      },
+      updates: [
+        {
+          search: '^(?P<begin>\\s*export\\s*const\\s*version\\s*=\\s*")\\d+\\.\\d+\\.\\d+(?P<end>";?)$',
+          replace: 'begin + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + end',
+        },
+        {
+          search: '^(?P<begin>\\s*export\\s*const\\s*fullVersion\\s*=\\s*")\\d+\\.\\d+\\.\\d+\\+\\d+\\.\\d+(?P<end>";?)$',
+          replace: 'begin + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + "+" + str::from(build) + "." + str::from(revision) + end',
+        },
+      ],
     },
     {
       description: "Git Version Tag",
       files: ["scratch/version.tag.txt"],
-      action: {
-        write: 'str::from(major) + "." + str::from(minor) + "." + str::from(patch)',
-      },
+      write: 'str::from(major) + "." + str::from(minor) + "." + str::from(patch)',
     },
     {
       description: "iOS PList",
       files: ["some-file.plist"],
-      action: {
-        copyFrom: '"src/some-file" + if(buildType == "test", "-test", "-prod") + ".plist"',
-      },
+      copyFrom: '"src/some-file" + if(buildType == "test", "-test", "-prod") + ".plist"',
     },
   ],
 }
@@ -153,11 +148,11 @@ These are any variables that need to get generated each time the tool runs. This
 
 ### `operations`
 
-These are the different version operations for your project. `incrMajor`, `incrMinor`, `incrPatch` are typical operations, but you can add whatever makes sense.
+These are the different version operations for your project. `incrMajor`, `incrMinor`, `incrPatch` are typical operations, but you can add whatever makes sense for your project.
 
 ### `targets`
 
-`targets` is a array of objects containing a `description`, an array of `files` to update and then an `action`.  `action` contains exactly one of
+`targets` is a array of objects containing a `description`, an array of `files` to update and then an action which must be exactly one of:
 
 - `updates` - An array of `{ search: , replace: }` objects.  `search` is a regular expression. It can contain at most two optional capture groups that must be called `begin` and `end`.  These can be used in the `replace` substitution string.
 - `write` - Writes content to the target files.  The content is an expression.

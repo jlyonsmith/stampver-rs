@@ -123,29 +123,25 @@ impl<'a> StampVerTool<'a> {
     let script_file = match input_file {
       Some(input_file) => input_file.canonicalize()?,
       None => {
-        // Search for a version file in the current directory
-        let mut path = None;
-
-        for entry in WalkDir::new(".") {
-          if let Ok(entry) = entry {
-            if entry.file_type().is_file()
-              && entry
-                .file_name()
-                .to_str()
-                .map(|s| s.starts_with("version.json"))
-                .unwrap_or(false)
-            {
-              path = Some(Path::new(entry.path()).to_path_buf());
-              break;
-            }
+        // Search for the nearest version file
+        match WalkDir::new(".")
+          .follow_links(false)
+          .into_iter()
+          .filter_map(|e| e.ok())
+          .filter(|e| e.file_name().to_string_lossy() == "version.json5")
+          .min_by_key(|e| e.path().components().count())
+        {
+          None => {
+            return Err(From::from(format!(
+              "No 'version.json5' file found in sub-directories"
+            )))
           }
-        }
-        match path {
-          None => return Err(From::from(format!("No version.json file found"))),
-          Some(path) => path,
+          Some(entry) => entry.path().to_owned(),
         }
       }
     };
+
+    output!(self.log, "Using script file '{}'", script_file.display());
 
     let content = fs::read_to_string(&script_file)?;
     let root_node = json5_nodes::parse(&content)?;

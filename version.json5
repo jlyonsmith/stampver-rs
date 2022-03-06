@@ -19,40 +19,22 @@
     {
       description: "Cargo Package",
       files: ["Cargo.toml"],
-      action: {
-        updates: [
-          {
-            search: '^(?P<begin>version\\s*=\\s*")\\d+\\.\\d+\\.\\d+(?P<end>"\\s*)$',
-            replace: 'begin + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + end',
-          },
-        ],
-      },
-    },
-    {
-      description: "Rust Clap Version",
-      files: ["src/bin/stampver.rs"],
-      action: {
-        updates: [
-          {
-            search: '^(?P<begin>\\s+\\.version\\(")\\d+\\.\\d+\\.\\d+\\+\\d+\\.\\d+(?P<end>"\\))$',
-            replace: 'begin + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + "+" + str::from(build) + "." + str::from(revision) + end',
-          },
-        ],
-      },
+      updates: [
+        {
+          search: '^(?P<begin>version\\s*=\\s*")\\d+\\.\\d+\\.\\d+(?P<end>"\\s*)$',
+          replace: 'begin + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + end',
+        },
+      ],
     },
     {
       description: "Git Tag Name",
       files: ["scratch/version.tag.txt"],
-      action: {
-        write: 'str::from(major) + "." + str::from(minor) + "." + str::from(patch)',
-      },
+      write: 'str::from(major) + "." + str::from(minor) + "." + str::from(patch)',
     },
     {
       description: "Git Tag Description",
       files: ["scratch/version.desc.txt"],
-      action: {
-        write: '"Version " + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + "+" + str::from(build) + "." + str::from(revision)',
-      },
+      write: '"Version " + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + "+" + str::from(build) + "." + str::from(revision)',
     },
   ],
 }
