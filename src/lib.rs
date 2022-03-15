@@ -20,7 +20,7 @@ use walkdir::WalkDir;
 
 use clap::{AppSettings, Parser};
 #[derive(Parser)]
-#[clap(author, version, about, long_about = None)]
+#[clap(version, about, long_about = None)]
 #[clap(global_setting(AppSettings::NoAutoHelp))]
 #[clap(global_setting(AppSettings::NoAutoVersion))]
 struct Cli {
@@ -39,8 +39,10 @@ struct Cli {
 pub trait StampVerLog {
   fn output(self: &Self, args: Arguments);
   fn warning(self: &Self, args: Arguments);
+  fn error(self: &Self, args: Arguments);
 }
 
+#[macro_export]
 macro_rules! output {
   ($log: expr, $fmt: expr) => {
     $log.output(format_args!($fmt))
@@ -49,13 +51,23 @@ macro_rules! output {
     $log.output(format_args!($fmt, $($args)+))
   };
 }
-
-macro_rules! warn {
+#[macro_export]
+macro_rules! warning {
   ($log: expr, $fmt: expr) => {
     $log.warning(format_args!($fmt))
   };
   ($log: expr, $fmt: expr, $($args: tt)+) => {
     $log.warning(format_args!($fmt, $($args)+))
+  };
+}
+
+#[macro_export]
+macro_rules! error {
+  ($log: expr, $fmt: expr) => {
+    $log.error(format_args!($fmt))
+  };
+  ($log: expr, $fmt: expr, $($args: tt)+) => {
+    $log.error(format_args!($fmt, $($args)+))
   };
 }
 
@@ -352,9 +364,10 @@ impl<'a> StampVerTool<'a> {
       }
 
       if let Some(tz_iana_name) = get_local_tz_iana_name() {
-        warn!(
+        warning!(
           self.log,
-          "No 'tz' timezone value set; using local time zone '{}'", tz_iana_name
+          "No 'tz' timezone value set; using local time zone '{}'",
+          tz_iana_name
         );
         context.set_value("tz".to_owned(), Value::from(tz_iana_name))?;
       }
@@ -474,7 +487,7 @@ impl<'a> StampVerTool<'a> {
             }
 
             if !found {
-              warn!(
+              warning!(
                 self.log,
                 "Search/replace in '{}' did not match anything; check your search string '{}'",
                 target_file.display().to_string(),
@@ -701,6 +714,7 @@ mod tests {
     impl StampVerLog for TestLogger {
       fn output(self: &Self, _args: Arguments) {}
       fn warning(self: &Self, _args: Arguments) {}
+      fn error(self: &Self, _args: Arguments) {}
     }
 
     let logger = TestLogger::new();

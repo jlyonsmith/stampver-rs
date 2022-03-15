@@ -40,25 +40,17 @@ Once you start using `stampver` you will be able to copy the `version.json5` fil
 The command line tool `stampver` is included in this crate using the `cli` feature flag, which is installed by default.
 
 ```text
-$ stampver --help
-
-StampVer 1.0.0+20210829.1
-John Lyon-Smith
-Version Update Tool.
-
 USAGE:
-    stampver [FLAGS] [OPTIONS] <OPERATION>
-
-FLAGS:
-    -h, --help       Prints help information
-    -u, --update     Actually do the update
-    -V, --version    Prints version information
-
-OPTIONS:
-    -i, --input <input_file>    Specify the version file explicitly
+    stampver [OPTIONS] [OPERATION]
 
 ARGS:
-    <OPERATION>    Select update operation specified in the version file
+    <OPERATION>    The versioning operation to perform
+
+OPTIONS:
+    -h, --help                  Print help information
+    -i, --input <INPUT_FILE>    Specify the version file explicitly
+    -u, --update                Actually do the update
+    -V, --version               Print version information
 ```
 
 The tool will describe the actions that it is taking on each file so you can check that it is doing what you expect.
@@ -154,7 +146,7 @@ These are the different version operations for your project. `incrMajor`, `incrM
 
 `targets` is a array of objects containing a `description`, an array of `files` to update and then an action which must be exactly one of:
 
-- `updates` - An array of `{ search: , replace: }` objects.  `search` is a regular expression. It can contain at most two optional capture groups that must be called `begin` and `end`.  These can be used in the `replace` substitution string.
+- `updates` - An array of `{ search: , replace: }` objects.  `search` is a regular expression. It can contain at most two optional capture groups that **must be called** `begin` and `end`.  These can be used in the `replace` substitution string.
 - `write` - Writes content to the target files.  The content is an expression.
 - `copyFrom` - Copies a file from another file, relative to the location of the `version.json5` file.  The name of the other file is an expression.
 

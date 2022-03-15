@@ -141,7 +141,6 @@ impl JsonNodeExtra for JsonNode {
     }
   }
 
-  // TODO: Implement to_string trait instead
   fn get_string(self: &Self) -> String {
     match self {
       JsonNode::Null(..) => "null".to_string(),

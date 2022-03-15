@@ -1,6 +1,6 @@
 use colored::Colorize;
 use core::fmt::Arguments;
-use stampver::{StampVerLog, StampVerTool};
+use stampver::{error, StampVerLog, StampVerTool};
 
 struct StampVerLogger;
 
@@ -17,14 +17,16 @@ impl StampVerLog for StampVerLogger {
   fn warning(self: &Self, args: Arguments) {
     eprintln!("{}", format!("warning: {}", args).yellow());
   }
+  fn error(self: &Self, args: Arguments) {
+    eprintln!("{}", format!("error: {}", args).red());
+  }
 }
 
 fn main() {
   let logger = StampVerLogger::new();
 
   if let Err(error) = StampVerTool::new(&logger).run(std::env::args_os()) {
-    // TODO: Use the logger here too
-    eprint!("{}", error);
+    error!(&logger, "{}", error);
     std::process::exit(1);
   }
 }
