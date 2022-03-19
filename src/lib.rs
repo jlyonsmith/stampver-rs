@@ -580,7 +580,13 @@ impl<'a> StampVerTool<'a> {
     for (identifier, var_node) in vars_node.get_object_iter()? {
       if let Some(value) = run_context.get_value(identifier) {
         let s = match value {
-          Value::String(s) => format!("\"{}\"", s),
+          Value::String(s) => {
+            if s.contains("\"") {
+              format!("'{}'", s)
+            } else {
+              format!("\"{}\"", s)
+            }
+          }
           Value::Float(f) => format!("{}", f),
           Value::Boolean(b) => format!("{}", b),
           Value::Int(n) => format!("{}", n),
@@ -589,7 +595,7 @@ impl<'a> StampVerTool<'a> {
         let re = RegexBuilder::new(
           &("(?P<begin>vars:\\s*\\{\n(?:.*\n)*?\\s*".to_string()
             + &identifier
-            + "\\s*:\\s).*?(?P<end>\\s*,.*?\n)"),
+            + "\\s*:\\s*).*?(?P<end>\\s*,?\\s*?\n)"),
         )
         .multi_line(true)
         .build()
