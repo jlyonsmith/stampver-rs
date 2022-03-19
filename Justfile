@@ -1,6 +1,6 @@
 coverage OPEN='':
   #!/usr/bin/env fish
-  set -x RUSTFLAGS '-Zinstrument-coverage'
+  set -x RUSTFLAGS '-C instrument-coverage'
   set -x LLVM_PROFILE_FILE (pwd)'/scratch/'(whoami)'-%p-%m.profraw'
   rm (pwd)/scratch/*.profraw
   cargo test --tests
