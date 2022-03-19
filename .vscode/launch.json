@@ -38,7 +38,12 @@
           "kind": "bin"
         }
       },
-      "args": [],
+      "args": [
+        "-u",
+        "-i",
+        "/Users/john/Projects/john/Spider-iOS/version.json5",
+        "incrRevision",
+      ],
       "cwd": "${workspaceFolder}"
     },
     {

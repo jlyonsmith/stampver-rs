@@ -26,7 +26,7 @@ fn main() {
   let logger = StampVerLogger::new();
 
   if let Err(error) = StampVerTool::new(&logger).run(std::env::args_os()) {
-    error!(&logger, "{}", error);
+    error!(logger, "{}", error);
     std::process::exit(1);
   }
 }

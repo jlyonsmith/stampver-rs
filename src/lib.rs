@@ -515,7 +515,8 @@ impl<'a> StampVerTool<'a> {
         } else if let Some(copy_from_node) = copy_from_node {
           if update {
             let copy_from_str = copy_from_node.get_string();
-            let s = eval_string_with_context(&copy_from_str, context)?;
+            let s = eval_string_with_context(&copy_from_str, context)
+              .map_err(|e| script_error!(e.to_string(), copy_from_node))?;
             let from_file = version_file_dir.join(s);
 
             fs::copy(&from_file, &target_file).map_err(|_| {
