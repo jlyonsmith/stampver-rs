@@ -39,9 +39,9 @@
         }
       },
       "args": [
-        "-u",
         "-i",
-        "/Users/john/Projects/john/Spider-iOS/version.json5",
+        "./scratch/new-format.json5",
+        "-u",
         "incrRevision",
       ],
       "cwd": "${workspaceFolder}"
