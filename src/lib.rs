@@ -1,15 +1,23 @@
 //! Update version information in project files
 
+//! Version stamping tool
+//!
+//! This is a library and command line tool for version stamping.
+//!
+#![deny(unsafe_code, missing_docs)]
+
 mod error;
 mod json_node_extra;
+mod log_macros;
 
 pub use error::ScriptError;
-pub use json_node_extra::*;
 
 use chrono::prelude::*;
+use clap::{CommandFactory, Parser};
 use core::fmt::Arguments;
 use evalexpr::*;
 use json5_nodes::JsonNode;
+use json_node_extra::*;
 use regex::{Captures, RegexBuilder};
 use std::borrow::Cow;
 use std::error::Error;
@@ -18,92 +26,75 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
-use clap::{AppSettings, Parser};
 #[derive(Parser)]
-#[clap(version, about, long_about = None)]
-#[clap(global_setting(AppSettings::NoAutoHelp))]
-#[clap(global_setting(AppSettings::NoAutoVersion))]
+#[clap(version, about, long_about = None, disable_help_flag = true, disable_version_flag = true)]
 struct Cli {
     /// The versioning operation to perform
     operation: Option<String>,
 
     /// Specify the version file explicitly
-    #[clap(short, long = "input", parse(from_os_str), value_name = "INPUT_FILE")]
+    #[arg(short, long = "input", value_name = "INPUT_FILE")]
     input_file: Option<PathBuf>,
 
     /// Actually do the update
-    #[clap(short, long)]
+    #[arg(short, long)]
     update: bool,
+
+    /// Display help
+    #[arg(short, long)]
+    help: bool,
+
+    /// Display version
+    #[arg(short = 'V', long)]
+    version: bool,
 }
 
+/// Versioning tool logger.
 pub trait StampVerLog {
+    /// Output a message to the log.
     fn output(self: &Self, args: Arguments);
+    /// Output a warning message to the log.
     fn warning(self: &Self, args: Arguments);
+    /// Output an error message to the log.
     fn error(self: &Self, args: Arguments);
 }
 
-#[macro_export]
-macro_rules! output {
-  ($log: expr, $fmt: expr) => {
-    $log.output(format_args!($fmt))
-  };
-  ($log: expr, $fmt: expr, $($args: tt)+) => {
-    $log.output(format_args!($fmt, $($args)+))
-  };
-}
-#[macro_export]
-macro_rules! warning {
-  ($log: expr, $fmt: expr) => {
-    $log.warning(format_args!($fmt))
-  };
-  ($log: expr, $fmt: expr, $($args: tt)+) => {
-    $log.warning(format_args!($fmt, $($args)+))
-  };
-}
-
-#[macro_export]
-macro_rules! error {
-  ($log: expr, $fmt: expr) => {
-    $log.error(format_args!($fmt))
-  };
-  ($log: expr, $fmt: expr, $($args: tt)+) => {
-    $log.error(format_args!($fmt, $($args)+))
-  };
-}
-
+/// Versioning tool for stamping version information into files.
 pub struct StampVerTool<'a> {
     log: &'a dyn StampVerLog,
 }
 
 impl<'a> StampVerTool<'a> {
-    pub fn new(log: &'a dyn StampVerLog) -> StampVerTool {
+    /// Create a new instance of StampVerTool.
+    pub fn new(log: &'a dyn StampVerLog) -> StampVerTool<'a> {
         StampVerTool { log }
     }
 
+    /// Run the stampver tool with the given arguments.
     pub fn run(
         self: &mut Self,
         args: impl IntoIterator<Item = std::ffi::OsString>,
     ) -> Result<(), Box<dyn Error>> {
-        use clap::IntoApp;
-        let matches = Cli::command().try_get_matches_from(args)?;
+        let cli = match Cli::try_parse_from(args) {
+            Ok(m) => m,
+            Err(err) => {
+                output!(self.log, "{}", err.to_string());
+                return Ok(());
+            }
+        };
 
-        if matches.is_present("version") {
-            output!(self.log, "{}", Cli::command().get_version().unwrap_or(""));
+        if cli.version {
+            let version = Cli::command().render_version();
+            output!(self.log, "{version}");
             return Ok(());
         }
 
-        if matches.is_present("help") {
-            let mut output = Vec::new();
-            let mut cmd = Cli::command();
+        if cli.help {
+            let help = Cli::command().render_long_help();
 
-            cmd.write_help(&mut output).unwrap();
-
-            output!(self.log, "{}", String::from_utf8(output).unwrap());
+            output!(self.log, "{help}");
             return Ok(());
         }
-
-        use clap::FromArgMatches;
-        let cli = Cli::from_arg_matches(&matches)?;
 
         let (content, root_node, script_file) = self.read_script_file(cli.input_file)?;
 
@@ -308,15 +299,15 @@ impl<'a> StampVerTool<'a> {
 
         context.set_value(
             "now::year".to_owned(),
-            Value::from(i64::from(now.date().year())),
+            Value::Int(i64::from(now.date_naive().year())),
         )?;
         context.set_value(
             "now::month".to_owned(),
-            Value::from(i64::from(now.date().month())),
+            Value::Int(i64::from(now.date_naive().month())),
         )?;
         context.set_value(
             "now::day".to_owned(),
-            Value::from(i64::from(now.date().day())),
+            Value::Int(i64::from(now.date_naive().day())),
         )?;
         context.set_function(
             "if".to_owned(),
@@ -377,7 +368,7 @@ impl<'a> StampVerTool<'a> {
         Ok(context)
     }
 
-    pub fn run_operation(
+    fn run_operation(
         self: &Self,
         operation: Option<String>,
         root_node: &JsonNode,
@@ -412,7 +403,7 @@ impl<'a> StampVerTool<'a> {
         }
     }
 
-    pub fn process_targets(
+    fn process_targets(
         self: &Self,
         script_file: &PathBuf,
         root_node: &JsonNode,
@@ -569,7 +560,7 @@ impl<'a> StampVerTool<'a> {
         Ok(())
     }
 
-    pub fn update_script_file(
+    fn update_script_file(
         self: &Self,
         script_file: &Path,
         content: String,

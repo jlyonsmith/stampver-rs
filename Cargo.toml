@@ -11,16 +11,17 @@ categories = ["command-line-utilities", "development-tools"]
 license = "Unlicense"
 
 [dependencies]
-clap = { version = "3.0.14", features = ["derive"] }
-json5_nodes = "^2.0.0"
-evalexpr = "^7.2.0"
-chrono = "0.4.19"
-regex = "^1.5.4"
-walkdir = "^2.3.2"
-colored = "^2.0.0"
+clap = { version = "4.5.40", features = ["derive"] }
+json5_nodes = "^2.0.1"
+evalexpr = "^12.0.2"
+chrono = "0.4.41"
+regex = "^1.11.1"
+walkdir = "^2.5.0"
+colored = "^3.0.0"
+cargo-edit = "0.13.6"
 
 [dev-dependencies]
-tempfile = "^3.2"
+tempfile = "^3.20"
 
 [[bin]]
 name = "stampver"

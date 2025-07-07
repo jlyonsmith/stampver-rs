@@ -132,19 +132,19 @@ The 4 main sections are as follows.
 
 ### `vars`
 
-This is where the version information lives, so in effect it is a simple version information database for you project.  This is also the only section that the tool rewrites when version information is updated.  It does it such a way as to preserve comments, but the tool does expect the layout to be like the example above.
+This is where the version information lives, so it is in effect a simple version database for your project.  This is also the only section that the tool rewrites when version information is updated.  It does it in such a way as to preserve comments, but the tool does expect the layout to be similar to the example above.
 
 ### `calcVars`
 
-These are any variables that need to get generated each time the tool runs. This can include things like a `build` number that is based on the date, or a `nextSequence` number.  The values in this section are merged with the `vars`, so be wary of naming conflicts.
+These are any variables that need to get generated *each time the tool runs*. This can include things like a `build` number that is based on the date, or a `nextSequence` number.  The values in this section are merged with the `vars`, so be wary of naming conflicts.
 
 ### `operations`
 
-These are the different version operations for your project. `incrMajor`, `incrMinor`, `incrPatch` are typical operations, but you can add whatever makes sense for your project.
+These are the different version operations for your project. `incrMajor`, `incrMinor`, `incrPatch` are typical, but you can add whatever makes sense for your project.
 
 ### `targets`
 
-`targets` is a array of objects containing a `description`, an array of `files` to update and then an action which must be exactly one of:
+`targets` is an array of objects containing a `description`, an array of `files` to update and then an action which must be exactly one of:
 
 - `updates` - An array of `{ search: , replace: }` objects.  `search` is a regular expression. It can contain at most two optional capture groups that **must be called** `begin` and `end`.  These can be used in the `replace` substitution string.
 - `write` - Writes content to the target files.  The content is an expression.
