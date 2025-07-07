@@ -1,6 +1,6 @@
 [package]
 name = "stampver"
-version = "1.0.5"
+version = "1.1.0"
 edition = "2021"
 authors = ["John Lyon-Smith <john@lyon-smith.org>"]
 readme = "README.md"
