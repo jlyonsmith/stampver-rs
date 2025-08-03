@@ -13,7 +13,7 @@ mod log_macros;
 pub use error::ScriptError;
 
 use chrono::prelude::*;
-use clap::{CommandFactory, Parser};
+use clap::Parser;
 use core::fmt::Arguments;
 use evalexpr::*;
 use json5_nodes::JsonNode;
@@ -27,7 +27,7 @@ use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 #[derive(Parser)]
-#[clap(version, about, long_about = None, disable_help_flag = true, disable_version_flag = true)]
+#[clap(version, about, long_about = None)]
 struct Cli {
     /// The versioning operation to perform
     operation: Option<String>,
@@ -39,14 +39,6 @@ struct Cli {
     /// Actually do the update
     #[arg(short, long)]
     update: bool,
-
-    /// Display help
-    #[arg(short, long)]
-    help: bool,
-
-    /// Display version
-    #[arg(short = 'V', long)]
-    version: bool,
 }
 
 /// Versioning tool logger.
@@ -82,19 +74,6 @@ impl<'a> StampVerTool<'a> {
                 return Ok(());
             }
         };
-
-        if cli.version {
-            let version = Cli::command().render_version();
-            output!(self.log, "{version}");
-            return Ok(());
-        }
-
-        if cli.help {
-            let help = Cli::command().render_long_help();
-
-            output!(self.log, "{help}");
-            return Ok(());
-        }
 
         let (content, root_node, script_file) = self.read_script_file(cli.input_file)?;
 

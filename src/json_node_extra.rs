@@ -13,12 +13,12 @@ pub(crate) trait JsonNodeExtra {
     fn is_string(&self) -> bool;
     fn is_array(&self) -> bool;
     fn is_object(&self) -> bool;
-    fn get_location(self: &Self) -> Option<Location>;
-    fn get_object_entry<'a>(self: &'a Self, name: &str) -> Result<&'a JsonNode, ScriptError>;
-    fn get_object_iter(self: &Self) -> Result<Iter<String, JsonNode>, ScriptError>;
-    fn get_array_iter(self: &Self) -> Result<std::slice::Iter<JsonNode>, ScriptError>;
-    fn get_value(self: &Self) -> Value;
-    fn get_string(self: &Self) -> String;
+    fn get_location(&self) -> Option<Location>;
+    fn get_object_entry(&self, name: &str) -> Result<&JsonNode, ScriptError>;
+    fn get_object_iter<'a>(&'a self) -> Result<Iter<'a, String, JsonNode>, ScriptError>;
+    fn get_array_iter<'a>(&'a self) -> Result<std::slice::Iter<'a, JsonNode>, ScriptError>;
+    fn get_value(&self) -> Value;
+    fn get_string(&self) -> String;
 }
 
 impl JsonNodeExtra for JsonNode {
@@ -59,7 +59,7 @@ impl JsonNodeExtra for JsonNode {
     }
 
     /// Is the node a string?
-    fn is_string(self: &Self) -> bool {
+    fn is_string(&self) -> bool {
         if let JsonNode::String(_, _) = self {
             true
         } else {
@@ -68,7 +68,7 @@ impl JsonNodeExtra for JsonNode {
     }
 
     /// Is the node an array?
-    fn is_array(self: &Self) -> bool {
+    fn is_array(&self) -> bool {
         if let JsonNode::Array(_, _) = self {
             true
         } else {
@@ -77,7 +77,7 @@ impl JsonNodeExtra for JsonNode {
     }
 
     /// Is the node an object?
-    fn is_object(self: &Self) -> bool {
+    fn is_object(&self) -> bool {
         if let JsonNode::Object(_, _) = self {
             true
         } else {
@@ -86,7 +86,7 @@ impl JsonNodeExtra for JsonNode {
     }
 
     /// Get the node location
-    fn get_location(self: &Self) -> Option<Location> {
+    fn get_location(&self) -> Option<Location> {
         match self {
             JsonNode::Null(location)
             | JsonNode::Bool(_, location)
@@ -115,7 +115,7 @@ impl JsonNodeExtra for JsonNode {
     }
 
     // Get object node iterator
-    fn get_object_iter(self: &Self) -> Result<Iter<String, JsonNode>, ScriptError> {
+    fn get_object_iter<'a>(&'a self) -> Result<Iter<'a, String, JsonNode>, ScriptError> {
         if let JsonNode::Object(map, _) = self {
             Ok(map.iter())
         } else {
@@ -124,7 +124,7 @@ impl JsonNodeExtra for JsonNode {
     }
 
     // Get array node iterator
-    fn get_array_iter(self: &Self) -> Result<std::slice::Iter<JsonNode>, ScriptError> {
+    fn get_array_iter<'a>(&'a self) -> Result<std::slice::Iter<'a, JsonNode>, ScriptError> {
         if let JsonNode::Array(array, _) = self {
             Ok(array.iter())
         } else {
