@@ -1,14 +1,20 @@
-coverage OPEN='':
+list:
+  just --list
+
+test:
+  cargo test
+
+cov-json:
   #!/usr/bin/env fish
-  set -x RUSTFLAGS '-C instrument-coverage'
-  set -x LLVM_PROFILE_FILE (pwd)'/scratch/'(whoami)'-%p-%m.profraw'
-  rm (pwd)/scratch/*.profraw
-  cargo test --tests
-  grcov . -s . --binary-path ./target/debug/ -t html --branch --ignore-not-existing -o ./target/debug/coverage/ --excl-start '^//\s*\{grcov-excl-start\}' --excl-stop '^//\s*\{grcov-excl-end\}'
-  cp ./target/debug/coverage/coverage.json ./coverage.json
-  if test '{{OPEN}}' = '--open'
-    open target/debug/coverage/index.html
-  end
+  cargo clean
+  cargo llvm-cov test --json --summary-only --output-path scratch/coverage-summary.json
+  set cov_percent (cat scratch/coverage-summary.json | jq '.data[0].totals.lines.percent' | math --scale 2)
+  set cov_color (if test $cov_percent -gt 80.0; echo green; else if test $cov_percent -lt 50.0; echo red; else echo yellow; end)
+  echo '{"schemaVersion":1,"label":"coverage","message":"'$cov_percent'%","color":"'$cov_color'"}' > coverage.json
+
+cov-html:
+  # You might need to run `cargo clean` first to get coverage for the binaries
+  cargo llvm-cov test --html --open
 
 doc:
   cargo doc --open
@@ -68,7 +74,7 @@ release OPERATION='incrPatch':
   end
 
   if test -e 'justfile' -o -e 'Justfile'
-    just coverage
+    just cov-json
   else
     cargo test
   end

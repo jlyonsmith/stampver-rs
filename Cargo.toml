@@ -1,7 +1,7 @@
 [package]
 name = "stampver"
 version = "1.2.0"
-edition = "2021"
+edition = "2024"
 authors = ["John Lyon-Smith <john@lyon-smith.org>"]
 readme = "README.md"
 description = "A tool for updating project version numbers"
@@ -11,17 +11,18 @@ categories = ["command-line-utilities", "development-tools"]
 license = "Unlicense"
 
 [dependencies]
-clap = { version = "4.5.40", features = ["derive"] }
-json5_nodes = "^2.0.1"
-evalexpr = "^12.0.2"
-chrono = "0.4.41"
-regex = "^1.11.1"
-walkdir = "^2.5.0"
-colored = "^3.0.0"
-cargo-edit = "0.13.6"
+clap = { version = "4", features = ["derive"] }
+json5_nodes = "^2.0.2"
+evalexpr = "^12.0.3"
+regex = "^1.12.3"
+log = "0.4.29"
+env_logger = "0.11.10"
+jiff = "0.2.23"
+path-clean = "1.0.1"
+anyhow = "1.0.102"
 
 [dev-dependencies]
-tempfile = "^3.20"
+duct = "1.1.1"
 
 [[bin]]
 name = "stampver"

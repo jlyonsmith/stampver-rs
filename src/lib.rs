@@ -1,6 +1,6 @@
-//! Update version information in project files
-
 //! Version stamping tool
+//!
+//! Update version information in project files
 //!
 //! This is a library and command line tool for version stamping.
 //!
@@ -8,127 +8,43 @@
 
 mod error;
 mod json_node_extra;
-mod log_macros;
 
 pub use error::ScriptError;
 
-use chrono::prelude::*;
-use clap::Parser;
-use core::fmt::Arguments;
 use evalexpr::*;
-use json5_nodes::JsonNode;
+use jiff::{Zoned, tz::TimeZone};
 use json_node_extra::*;
+use json5_nodes::JsonNode;
 use regex::{Captures, RegexBuilder};
-use std::borrow::Cow;
-use std::error::Error;
-use std::ffi::OsStr;
-use std::fs;
-use std::path::{Path, PathBuf};
-use walkdir::WalkDir;
-
-#[derive(Parser)]
-#[clap(version, about, long_about = None)]
-struct Cli {
-    /// The versioning operation to perform
-    operation: Option<String>,
-
-    /// Specify the version file explicitly
-    #[arg(short, long = "input", value_name = "INPUT_FILE")]
-    input_file: Option<PathBuf>,
-
-    /// Actually do the update
-    #[arg(short, long)]
-    update: bool,
-}
-
-/// Versioning tool logger.
-pub trait StampVerLog {
-    /// Output a message to the log.
-    fn output(self: &Self, args: Arguments);
-    /// Output a warning message to the log.
-    fn warning(self: &Self, args: Arguments);
-    /// Output an error message to the log.
-    fn error(self: &Self, args: Arguments);
-}
+use std::{
+    borrow::Cow,
+    fs,
+    path::{Path, PathBuf},
+};
 
 /// Versioning tool for stamping version information into files.
-pub struct StampVerTool<'a> {
-    log: &'a dyn StampVerLog,
-}
+pub struct StampVerTool {}
 
-impl<'a> StampVerTool<'a> {
+impl StampVerTool {
     /// Create a new instance of StampVerTool.
-    pub fn new(log: &'a dyn StampVerLog) -> StampVerTool<'a> {
-        StampVerTool { log }
+    pub fn new() -> StampVerTool {
+        StampVerTool {}
     }
 
-    /// Run the stampver tool with the given arguments.
-    pub fn run(
-        self: &mut Self,
-        args: impl IntoIterator<Item = std::ffi::OsString>,
-    ) -> Result<(), Box<dyn Error>> {
-        let cli = match Cli::try_parse_from(args) {
-            Ok(m) => m,
-            Err(err) => {
-                output!(self.log, "{}", err.to_string());
-                return Ok(());
-            }
-        };
-
-        let (content, root_node, script_file) = self.read_script_file(cli.input_file)?;
-
-        let inner_run = || {
-            self.validate_script_file(&root_node)?;
-
-            let mut run_context = self.create_run_context(&root_node)?;
-
-            self.run_operation(cli.operation, &root_node, &mut run_context)?;
-            self.process_targets(&script_file, &root_node, cli.update, &mut run_context)?;
-            self.update_script_file(&script_file, content, &root_node, &run_context, cli.update)?;
-
-            Ok::<_, ScriptError>(())
-        };
-
-        inner_run()
-            .map_err(|e| ScriptError::new(e.message, Some(script_file.clone()), e.location))?;
-
-        Ok(())
-    }
-
-    fn read_script_file(
+    /// Read the script file and return its content and root node.
+    pub fn read_script_file(
         self: &Self,
-        input_file: Option<PathBuf>,
-    ) -> Result<(String, JsonNode, PathBuf), Box<dyn Error>> {
-        let script_file = match input_file {
-            Some(input_file) => input_file.canonicalize()?,
-            None => {
-                // Search for the nearest version file
-                match WalkDir::new(".")
-                    .follow_links(false)
-                    .into_iter()
-                    .filter_map(|e| e.ok())
-                    .filter(|e| e.file_name().to_string_lossy() == "version.json5")
-                    .min_by_key(|e| e.path().components().count())
-                {
-                    None => {
-                        return Err(From::from(format!(
-                            "No 'version.json5' file found in sub-directories"
-                        )))
-                    }
-                    Some(entry) => entry.path().to_owned(),
-                }
-            }
-        };
-
-        output!(self.log, "Using script file '{}'", script_file.display());
-
-        let content = fs::read_to_string(&script_file)?;
+        input_file: PathBuf,
+    ) -> anyhow::Result<(String, JsonNode, PathBuf)> {
+        let script_path = input_file.canonicalize()?;
+        let content = fs::read_to_string(&script_path)?;
         let root_node = json5_nodes::parse(&content)?;
 
-        Ok((content, root_node, script_file))
+        Ok((content, root_node, script_path))
     }
 
-    fn validate_script_file(self: &Self, root_node: &'a JsonNode) -> Result<(), ScriptError> {
+    /// Validate the script file's root node.
+    pub fn validate_script_file(self: &Self, root_node: &JsonNode) -> Result<(), ScriptError> {
         if !root_node.is_object() {
             return Err(script_error!("Node <root> is not an object", root_node));
         }
@@ -263,7 +179,8 @@ impl<'a> StampVerTool<'a> {
         Ok(())
     }
 
-    fn create_run_context(
+    /// Create a run context from the root node.
+    pub fn create_run_context(
         self: &Self,
         root_node: &JsonNode,
     ) -> Result<HashMapContext, ScriptError> {
@@ -274,20 +191,28 @@ impl<'a> StampVerTool<'a> {
             context.set_value(identifier.to_string(), Value::from(var_node.get_value()))?;
         }
 
-        let now: DateTime<Utc> = Utc::now();
+        let tz: TimeZone;
 
-        context.set_value(
-            "now::year".to_owned(),
-            Value::Int(i64::from(now.date_naive().year())),
-        )?;
-        context.set_value(
-            "now::month".to_owned(),
-            Value::Int(i64::from(now.date_naive().month())),
-        )?;
-        context.set_value(
-            "now::day".to_owned(),
-            Value::Int(i64::from(now.date_naive().day())),
-        )?;
+        if let Some(Value::String(tz_value)) = context.get_value("tz") {
+            let iana_name = tz_value.as_str();
+            tz = TimeZone::get(iana_name).map_err(|e| script_error!(e.to_string()))?;
+        } else {
+            tz = TimeZone::system();
+            log::warn!(
+                "'tz' value not set or not a string; using system time zone '{}'",
+                tz.iana_name().unwrap()
+            );
+        }
+
+        context.set_value("tz".to_owned(), Value::from(tz.iana_name().unwrap()))?;
+
+        let now: Zoned = Zoned::now();
+
+        now.with_time_zone(tz);
+
+        context.set_value("now::year".to_owned(), Value::Int(i64::from(now.year())))?;
+        context.set_value("now::month".to_owned(), Value::Int(i64::from(now.month())))?;
+        context.set_value("now::day".to_owned(), Value::Int(i64::from(now.day())))?;
         context.set_function(
             "if".to_owned(),
             Function::new(|arg| {
@@ -317,37 +242,11 @@ impl<'a> StampVerTool<'a> {
             context.set_value(identifier.to_owned(), value)?;
         }
 
-        if let None = context.get_value("tz") {
-            fn get_local_tz_iana_name() -> Option<String> {
-                if let Ok(path) = fs::read_link("/etc/localtime") {
-                    let path_zoneinfo = OsStr::new("zoneinfo");
-                    let arr = path
-                        .iter()
-                        .skip_while(|s| *s != path_zoneinfo)
-                        .skip(1)
-                        .map(|s| s.to_string_lossy().to_string())
-                        .collect::<Vec<_>>();
-
-                    Some(format!("{}/{}", arr[0], arr[1]))
-                } else {
-                    None
-                }
-            }
-
-            if let Some(tz_iana_name) = get_local_tz_iana_name() {
-                warning!(
-                    self.log,
-                    "No 'tz' timezone value set; using local time zone '{}'",
-                    tz_iana_name
-                );
-                context.set_value("tz".to_owned(), Value::from(tz_iana_name))?;
-            }
-        }
-
         Ok(context)
     }
 
-    fn run_operation(
+    /// Run an operation from the script file.
+    pub fn run_operation(
         self: &Self,
         operation: Option<String>,
         root_node: &JsonNode,
@@ -363,7 +262,7 @@ impl<'a> StampVerTool<'a> {
                 )
             })?;
 
-            output!(self.log, "Operation '{}'", operation);
+            log::info!("Operation '{}'", operation);
             evalexpr::eval_with_context_mut(&operation_node.get_string(), context)
                 .map_err(|e| script_error!(e.to_string(), operation_node))?;
             Ok(())
@@ -382,7 +281,8 @@ impl<'a> StampVerTool<'a> {
         }
     }
 
-    fn process_targets(
+    /// Process the targets defined in the script file.
+    pub fn process_targets(
         self: &Self,
         script_file: &PathBuf,
         root_node: &JsonNode,
@@ -393,11 +293,13 @@ impl<'a> StampVerTool<'a> {
 
         for target_node in root_node.get_object_entry("targets")?.get_array_iter()? {
             for target_file_node in target_node.get_object_entry("files")?.get_array_iter()? {
-                let target_file = version_file_dir.join(target_file_node.get_string());
                 let updates_node = target_node.get_object_entry("updates").ok();
                 let write_node = target_node.get_object_entry("write").ok();
                 let copy_from_node = target_node.get_object_entry("copyFrom").ok();
                 let mut action = "".to_string();
+                let mut target_file = version_file_dir.join(target_file_node.get_string());
+
+                target_file = path_clean::clean(target_file);
 
                 if let Some(updates_node) = updates_node {
                     let mut content = fs::read_to_string(&target_file).map_err(|_| {
@@ -458,12 +360,11 @@ impl<'a> StampVerTool<'a> {
                         }
 
                         if !found {
-                            warning!(
-                self.log,
-                "Search/replace in '{}' did not match anything; check your search string '{}'",
-                target_file.display().to_string(),
-                search_str
-              )
+                            log::warn!(
+                                "Search/replace in '{}' did not match anything; check your search string '{}'",
+                                target_file.display().to_string(),
+                                search_str
+                            )
                         }
                     }
 
@@ -481,8 +382,6 @@ impl<'a> StampVerTool<'a> {
                     } else {
                         action += "Would update";
                     }
-
-                    ()
                 } else if let Some(copy_from_node) = copy_from_node {
                     if update {
                         let copy_from_str = copy_from_node.get_string();
@@ -504,7 +403,6 @@ impl<'a> StampVerTool<'a> {
                     } else {
                         action += "Would copy"
                     }
-                    ()
                 } else if let Some(write_node) = write_node {
                     if update {
                         let file_content = write_node.get_string();
@@ -524,11 +422,9 @@ impl<'a> StampVerTool<'a> {
                     } else {
                         action += "Would write";
                     }
-                    ()
                 }
 
-                output!(
-                    self.log,
+                log::info!(
                     "{} '{}' -> '{}'",
                     action,
                     target_node.get_object_entry("description")?.get_string(),
@@ -539,7 +435,8 @@ impl<'a> StampVerTool<'a> {
         Ok(())
     }
 
-    fn update_script_file(
+    /// Update the script file with the given content and root node.
+    pub fn update_script_file(
         self: &Self,
         script_file: &Path,
         content: String,
@@ -588,136 +485,5 @@ impl<'a> StampVerTool<'a> {
         }
 
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_run() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let version_file = temp_dir.path().join("version.json5");
-        let version_content = r##"// Test file
-  {
-    vars: {
-      major: 3,
-      minor: 0,
-      patch: 0,
-      build: 20210902,
-      revision: 0,
-      tz: "America/Los_Angeles",
-      sequence: 6,
-      buildType: "test",
-      pi: 3.14,
-      debug: true,
-    },
-    calcVars: {
-      nextBuild: "now::year * 10000 + now::month * 100 + now::day",
-      nextSequence: "sequence + 1",
-    },
-    operations: {
-      incrMajor: "major += 1; minor = 0; patch = 0; revision = 0; build = nextBuild",
-      incrMinor: "minor += 1; patch = 0; revision = 0; build = nextBuild",
-      incrPatch: "patch += 1; revision = 0; build = nextBuild",
-      incrRevision: "revision += 1; build = nextBuild",
-      incrSequence: "sequence += 1",
-      setBetaBuild: 'buildType = "beta"',
-      setProdBuild: 'buildType = "prod"',
-    },
-    targets: [
-      {
-        description: "NodeJS package file",
-        files: ["package.json"],
-        updates: [
-          {
-            search: '^(?P<begin>\\s*"version"\\s*:\\s*")\\d+\\.\\d+\\.\\d+(?P<end>")',
-            replace: 'begin + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + end',
-          },
-        ],
-      },
-      {
-        description: "TypeScript version",
-        files: ["version.ts"],
-        updates: [
-          {
-            search: '^(?P<begin>\\s*export\\s*const\\s*version\\s*=\\s*")\\d+\\.\\d+\\.\\d+(?P<end>";?)$',
-            replace: 'begin + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + end',
-          },
-          {
-            search: '^(?P<begin>\\s*export\\s*const\\s*fullVersion\\s*=\\s*")\\d+\\.\\d+\\.\\d+\\+\\d+\\.\\d+(?P<end>";?)$',
-            replace: 'begin + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + "+" + str::from(build) + "." + str::from(revision) + end',
-          },
-        ],
-      },
-      {
-        description: "Git version tag commit message",
-        files: ["version.desc.txt"],
-        write: '"Version" + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + "+" + str::from(build) + "." + str::from(revision)',
-      },
-      {
-        description: "Google Firebase",
-        files: ["some-file.plist"],
-        copyFrom: '"some-file" + if(buildType == "test", "-test", "-prod") + ".plist"',
-      },
-    ],
-  }
-          "##;
-        let package_json_content = r##"
-  {
-    "name": "dummy",
-    "version": "0.0.0"
-  }
-      "##;
-        let version_ts_content = r##"
-  export const version = "10.0.0";
-  export const fullVersion = "10.0.0+20210903.0";
-      "##;
-
-        fs::write(&version_file, &version_content).unwrap();
-        println!("{}", version_file.display());
-        fs::write(&temp_dir.path().join("package.json"), &package_json_content).unwrap();
-        fs::write(&temp_dir.path().join("version.ts"), &version_ts_content).unwrap();
-        fs::write(
-            &temp_dir.path().join("some-file-test.plist"),
-            "some-file-test",
-        )
-        .unwrap();
-
-        struct TestLogger;
-
-        impl TestLogger {
-            fn new() -> TestLogger {
-                TestLogger {}
-            }
-        }
-
-        impl StampVerLog for TestLogger {
-            fn output(self: &Self, _args: Arguments) {}
-            fn warning(self: &Self, _args: Arguments) {}
-            fn error(self: &Self, _args: Arguments) {}
-        }
-
-        let logger = TestLogger::new();
-        let mut tool = StampVerTool::new(&logger);
-        let args1: Vec<std::ffi::OsString> = vec![
-            "".into(),
-            "incrMajor".into(),
-            "-i".into(),
-            version_file.display().to_string().into(),
-        ];
-
-        tool.run(args1).unwrap();
-
-        let args2: Vec<std::ffi::OsString> = vec![
-            "".into(),
-            "incrMajor".into(),
-            "-i".into(),
-            version_file.display().to_string().into(),
-            "-u".into(),
-        ];
-
-        tool.run(args2).unwrap();
     }
 }

@@ -1,32 +1,85 @@
-use colored::Colorize;
-use core::fmt::Arguments;
-use stampver::{error, StampVerLog, StampVerTool};
+use anyhow::Context;
+use clap::Parser;
+use env_logger::{Builder, Target};
+use log::{Level, LevelFilter};
+use stampver::{ScriptError, StampVerTool};
+use std::{io::Write, path::PathBuf, process::exit};
 
-struct StampVerLogger;
+#[derive(Parser)]
+#[command(version, about, long_about = None)]
+struct Cli {
+    /// The versioning operation to perform
+    #[arg(value_name = "OPERATION")]
+    operation: Option<String>,
 
-impl StampVerLogger {
-  fn new() -> StampVerLogger {
-    StampVerLogger {}
-  }
-}
+    /// Specify the version file explicitly
+    #[arg(
+        value_name = "INPUT_FILE",
+        short,
+        long = "input",
+        default_value = "version.json5"
+    )]
+    input_file: PathBuf,
 
-impl StampVerLog for StampVerLogger {
-  fn output(self: &Self, args: Arguments) {
-    println!("{}", args);
-  }
-  fn warning(self: &Self, args: Arguments) {
-    eprintln!("{}", format!("warning: {}", args).yellow());
-  }
-  fn error(self: &Self, args: Arguments) {
-    eprintln!("{}", format!("error: {}", args).red());
-  }
+    /// Actually do the update
+    #[arg(short, long)]
+    update: bool,
 }
 
 fn main() {
-  let logger = StampVerLogger::new();
+    match run() {
+        Ok(code) => exit(code),
+        Err(err) => {
+            eprintln!("error: {}", err);
+            let mut source = err.source();
+            while let Some(e) = source {
+                eprintln!("caused by: {}", e);
+                source = e.source();
+            }
+            exit(1);
+        }
+    }
+}
 
-  if let Err(error) = StampVerTool::new(&logger).run(std::env::args_os()) {
-    error!(logger, "{}", error);
-    std::process::exit(1);
-  }
+/// Run the stampver tool with the given arguments.
+pub fn run() -> anyhow::Result<i32> {
+    let cli = match Cli::try_parse() {
+        Ok(m) => m,
+        Err(err) => {
+            eprintln!("{}", err);
+            return Ok(0);
+        }
+    };
+
+    let mut builder = Builder::new();
+
+    builder
+        .format(|buf, record| match record.level() {
+            Level::Info => writeln!(buf, "{}", record.args()),
+            _ => writeln!(buf, "{}: {}", record.level(), record.args()),
+        })
+        .filter(None, LevelFilter::Info)
+        .target(Target::Stderr)
+        .init();
+
+    let tool = StampVerTool::new();
+    let (content, root_node, script_file) = tool
+        .read_script_file(cli.input_file)
+        .context("failed to read script file")?;
+
+    let inner_run = || {
+        tool.validate_script_file(&root_node)?;
+
+        let mut run_context = tool.create_run_context(&root_node)?;
+
+        tool.run_operation(cli.operation, &root_node, &mut run_context)?;
+        tool.process_targets(&script_file, &root_node, cli.update, &mut run_context)?;
+        tool.update_script_file(&script_file, content, &root_node, &run_context, cli.update)?;
+
+        Ok::<_, ScriptError>(())
+    };
+
+    inner_run().map_err(|e| ScriptError::new(e.message, Some(script_file.clone()), e.location))?;
+
+    Ok(0)
 }

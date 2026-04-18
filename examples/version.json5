@@ -1,0 +1,64 @@
+// Test file
+{
+  vars: {
+    major: 3,
+    minor: 0,
+    patch: 0,
+    build: 20210902,
+    revision: 0,
+    tz: "America/Los_Angeles",
+    sequence: 6,
+    buildType: "test",
+    pi: 3.14,
+    debug: true,
+  },
+  calcVars: {
+    nextBuild: "now::year * 10000 + now::month * 100 + now::day",
+    nextSequence: "sequence + 1",
+  },
+  operations: {
+    incrMajor: "major += 1; minor = 0; patch = 0; revision = 0; build = nextBuild",
+    incrMinor: "minor += 1; patch = 0; revision = 0; build = nextBuild",
+    incrPatch: "patch += 1; revision = 0; build = nextBuild",
+    incrRevision: "revision += 1; build = nextBuild",
+    incrSequence: "sequence += 1",
+    setBetaBuild: 'buildType = "beta"',
+    setProdBuild: 'buildType = "prod"',
+  },
+  targets: [
+    {
+      description: "NodeJS package file",
+      files: ["package.json"],
+      updates: [
+        {
+          search: '^(?P<begin>\\s*"version"\\s*:\\s*")\\d+\\.\\d+\\.\\d+(?P<end>")',
+          replace: 'begin + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + end',
+        },
+      ],
+    },
+    {
+      description: "TypeScript version",
+      files: ["version.ts"],
+      updates: [
+        {
+          search: '^(?P<begin>\\s*export\\s*const\\s*version\\s*=\\s*")\\d+\\.\\d+\\.\\d+(?P<end>";?)$',
+          replace: 'begin + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + end',
+        },
+        {
+          search: '^(?P<begin>\\s*export\\s*const\\s*fullVersion\\s*=\\s*")\\d+\\.\\d+\\.\\d+\\+\\d+\\.\\d+(?P<end>";?)$',
+          replace: 'begin + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + "+" + str::from(build) + "." + str::from(revision) + end',
+        },
+      ],
+    },
+    {
+      description: "Git version tag commit message",
+      files: ["../scratch/version.desc.txt"],
+      write: '"Version" + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + "+" + str::from(build) + "." + str::from(revision)',
+    },
+    {
+      description: "Google Firebase",
+      files: ["../scratch/some-file.plist"],
+      copyFrom: '"some-file" + if(buildType == "test", "-test", "-prod") + ".plist"',
+    },
+  ],
+}

@@ -54,7 +54,7 @@ impl Display for ScriptError {
             if let Some(location) = self.location {
                 return write!(
                     formatter,
-                    "{} ({},{}): {}",
+                    "{} ({}:{}): {}",
                     file.to_str().unwrap_or("???"),
                     location.line,
                     location.column,
@@ -73,5 +73,8 @@ impl Error for ScriptError {}
 macro_rules! script_error {
     ($msg: expr, $node: expr) => {
         ScriptError::new($msg.to_string(), None, $node.get_location())
+    };
+    ($msg: expr) => {
+        ScriptError::new($msg.to_string(), None, None)
     };
 }
