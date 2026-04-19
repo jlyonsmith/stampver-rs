@@ -5,7 +5,7 @@ use log::{Level, LevelFilter};
 use stampver::{ScriptError, StampVerTool};
 use std::{io::Write, path::PathBuf, process::exit};
 
-#[derive(Parser)]
+#[derive(clap::Parser)]
 #[command(version, about, long_about = None)]
 struct Cli {
     /// The versioning operation to perform
@@ -24,6 +24,10 @@ struct Cli {
     /// Actually do the update
     #[arg(short, long)]
     update: bool,
+
+    /// Filter output to update only files under this directory
+    #[arg(value_name = "DIR_PATH", short = 'f', long = "filter")]
+    filter_path: Option<PathBuf>,
 }
 
 fn main() {
@@ -66,6 +70,7 @@ pub fn run() -> anyhow::Result<i32> {
     let (content, root_node, script_file) = tool
         .read_script_file(cli.input_file)
         .context("failed to read script file")?;
+    let filter_path = tool.validate_filter_path(cli.filter_path.as_deref())?;
 
     let inner_run = || {
         tool.validate_script_file(&root_node)?;
@@ -73,7 +78,13 @@ pub fn run() -> anyhow::Result<i32> {
         let mut run_context = tool.create_run_context(&root_node)?;
 
         tool.run_operation(cli.operation, &root_node, &mut run_context)?;
-        tool.process_targets(&script_file, &root_node, cli.update, &mut run_context)?;
+        tool.process_targets(
+            &script_file,
+            &root_node,
+            cli.update,
+            &mut run_context,
+            &filter_path,
+        )?;
         tool.update_script_file(&script_file, content, &root_node, &run_context, cli.update)?;
 
         Ok::<_, ScriptError>(())

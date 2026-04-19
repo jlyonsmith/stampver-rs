@@ -11,6 +11,7 @@ mod json_node_extra;
 
 pub use error::ScriptError;
 
+use anyhow::Context as AnyhowContext;
 use evalexpr::*;
 use jiff::{Zoned, tz::TimeZone};
 use json_node_extra::*;
@@ -18,7 +19,7 @@ use json5_nodes::JsonNode;
 use regex::{Captures, RegexBuilder};
 use std::{
     borrow::Cow,
-    fs,
+    env, fs,
     path::{Path, PathBuf},
 };
 
@@ -41,6 +42,29 @@ impl StampVerTool {
         let root_node = json5_nodes::parse(&content)?;
 
         Ok((content, root_node, script_path))
+    }
+
+    /// Validate the filter path.
+    pub fn validate_filter_path(
+        self: &Self,
+        filter_path: Option<&Path>,
+    ) -> anyhow::Result<PathBuf> {
+        if let Some(path) = filter_path {
+            let filter_path = path
+                .canonicalize()
+                .context(format!("Failed to canonicalize path '{}'", path.display()))?;
+
+            if !filter_path.is_dir() {
+                return Err(anyhow::anyhow!(
+                    "Filter path '{}' is not a directory",
+                    filter_path.display()
+                ));
+            } else {
+                Ok(filter_path)
+            }
+        } else {
+            Ok(env::current_dir()?)
+        }
     }
 
     /// Validate the script file's root node.
@@ -288,6 +312,7 @@ impl StampVerTool {
         root_node: &JsonNode,
         update: bool,
         context: &mut HashMapContext,
+        filter_path: &Path,
     ) -> Result<(), ScriptError> {
         let version_file_dir = script_file.parent().unwrap_or(Path::new("."));
 
@@ -297,9 +322,24 @@ impl StampVerTool {
                 let write_node = target_node.get_object_entry("write").ok();
                 let copy_from_node = target_node.get_object_entry("copyFrom").ok();
                 let mut action = "".to_string();
-                let mut target_file = version_file_dir.join(target_file_node.get_string());
+                let mut target_file = PathBuf::from(target_file_node.get_string());
 
-                target_file = path_clean::clean(target_file);
+                if target_file.is_relative() {
+                    target_file = path_clean::clean(version_file_dir.join(target_file));
+                } else {
+                    return Err(script_error!(format!(
+                        "Target file path '{}' must be relative",
+                        target_file.display()
+                    )));
+                }
+
+                if !target_file.starts_with(filter_path) {
+                    log::warn!(
+                        "Target file '{}' does not match filter path",
+                        target_file.display()
+                    );
+                    continue;
+                }
 
                 if let Some(updates_node) = updates_node {
                     let mut content = fs::read_to_string(&target_file).map_err(|_| {
