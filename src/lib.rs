@@ -45,34 +45,35 @@ impl StampVerTool {
     }
 
     /// Validate the filter path.
-    pub fn validate_filter_path(
+    pub fn validate_filter_paths(
         self: &Self,
-        filter_path: Option<&Path>,
-    ) -> anyhow::Result<PathBuf> {
-        match filter_path {
-            Some(path) => {
-                let mut path = path.to_path_buf();
+        filter_paths: &Vec<PathBuf>,
+    ) -> anyhow::Result<Vec<PathBuf>> {
+        let mut cleaned_filter_paths = vec![];
 
-                if path.is_relative() {
-                    path = std::env::current_dir()?.join(path);
-                }
+        for filter_path in filter_paths.iter() {
+            let mut path = if filter_path.is_relative() {
+                std::env::current_dir()?.join(filter_path)
+            } else {
+                filter_path.clone()
+            };
 
-                path = path.canonicalize().context(format!(
-                    "Failed to canonicalize filter path '{}'",
+            path = path.canonicalize().context(format!(
+                "Failed to canonicalize filter path '{}'",
+                path.display()
+            ))?;
+
+            if !path.is_dir() {
+                return Err(anyhow::anyhow!(
+                    "Filter path '{}' is not a directory",
                     path.display()
-                ))?;
-
-                if !path.is_dir() {
-                    return Err(anyhow::anyhow!(
-                        "Filter path '{}' is not a directory",
-                        path.display()
-                    ));
-                }
-
-                Ok(path)
+                ));
             }
-            None => Ok(std::env::current_dir()?),
+
+            cleaned_filter_paths.push(path);
         }
+
+        Ok(cleaned_filter_paths)
     }
 
     /// Validate the script file's root node.
@@ -320,7 +321,7 @@ impl StampVerTool {
         root_node: &JsonNode,
         update: bool,
         context: &mut HashMapContext,
-        filter_path: &Path,
+        filter_paths: &Vec<PathBuf>,
     ) -> Result<(), ScriptError> {
         let version_file_dir = script_file.parent().unwrap_or(Path::new("."));
 
@@ -344,7 +345,10 @@ impl StampVerTool {
 
                 target_file = path_clean::clean(version_file_dir.join(target_file));
 
-                if !target_file.starts_with(filter_path) {
+                if !filter_paths
+                    .iter()
+                    .any(|path| target_file.starts_with(path))
+                {
                     log::warn!(
                         "File '{}' is outside the filter path and will be skipped",
                         target_file.display().to_string()
