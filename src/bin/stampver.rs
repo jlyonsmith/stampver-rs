@@ -63,6 +63,7 @@ pub fn run() -> anyhow::Result<i32> {
             _ => writeln!(buf, "{}: {}", record.level(), record.args()),
         })
         .filter(None, LevelFilter::Info)
+        .parse_default_env()
         .target(Target::Stderr)
         .init();
 
