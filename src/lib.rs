@@ -19,7 +19,7 @@ use json5_nodes::JsonNode;
 use regex::{Captures, RegexBuilder};
 use std::{
     borrow::Cow,
-    env, fs,
+    fs,
     path::{Path, PathBuf},
 };
 
@@ -49,21 +49,29 @@ impl StampVerTool {
         self: &Self,
         filter_path: Option<&Path>,
     ) -> anyhow::Result<PathBuf> {
-        if let Some(path) = filter_path {
-            let filter_path = path
-                .canonicalize()
-                .context(format!("Failed to canonicalize path '{}'", path.display()))?;
+        match filter_path {
+            Some(path) => {
+                let mut path = path.to_path_buf();
 
-            if !filter_path.is_dir() {
-                return Err(anyhow::anyhow!(
-                    "Filter path '{}' is not a directory",
-                    filter_path.display()
-                ));
-            } else {
-                Ok(filter_path)
+                if path.is_relative() {
+                    path = std::env::current_dir()?.join(path);
+                }
+
+                path = path.canonicalize().context(format!(
+                    "Failed to canonicalize filter path '{}'",
+                    path.display()
+                ))?;
+
+                if !path.is_dir() {
+                    return Err(anyhow::anyhow!(
+                        "Filter path '{}' is not a directory",
+                        path.display()
+                    ));
+                }
+
+                Ok(path)
             }
-        } else {
-            Ok(env::current_dir()?)
+            None => Ok(std::env::current_dir()?),
         }
     }
 
@@ -324,19 +332,22 @@ impl StampVerTool {
                 let mut action = "".to_string();
                 let mut target_file = PathBuf::from(target_file_node.get_string());
 
-                if target_file.is_relative() {
-                    target_file = path_clean::clean(version_file_dir.join(target_file));
-                } else {
-                    return Err(script_error!(format!(
-                        "Target file path '{}' must be relative",
-                        target_file.display()
-                    )));
+                if target_file.is_absolute() {
+                    return Err(script_error!(
+                        format!(
+                            "Target file '{}' is an absolute path, but should be relative to the script file",
+                            target_file.display().to_string()
+                        ),
+                        target_file_node
+                    ));
                 }
+
+                target_file = path_clean::clean(version_file_dir.join(target_file));
 
                 if !target_file.starts_with(filter_path) {
                     log::warn!(
-                        "Target file '{}' does not match filter path",
-                        target_file.display()
+                        "File '{}' is outside the filter path and will be skipped",
+                        target_file.display().to_string()
                     );
                     continue;
                 }

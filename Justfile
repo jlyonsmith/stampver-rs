@@ -102,3 +102,11 @@ release OPERATION='incrPatch':
 
   info "Finished release of '"$name"\' on branch '"$branch"'. You can publish the crate."
   exit 0
+
+# Used to clean up if you accidentally miss something in a release and need to reset the tag
+del-last-tag:
+  #!/usr/bin/env fish
+  set tagName (cat "scratch/version.tag.txt")
+
+  git tag -d $tagName
+  git push origin --delete $tagName

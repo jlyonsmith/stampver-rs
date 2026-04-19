@@ -9,8 +9,10 @@ A Rust package and command line tool for updating version information in ANY typ
 - Define which files need to be updated
 - Three types of actions; update in place, create or copy in existing files
 - Use regular expressions to find and replace content in existing files
-- Store and insert other information in addition to versions, such as copyrights, etc..
-- Fully customize the type of version update operations that you want for your project
+- Store and insert other information in addition to versions, such as
+  copyrights, etc..
+- Fully customize the type of version update operations that you want for your
+  project
 - Supports any type of versioning scheme that you wish to use
 
 ## Overview
@@ -40,17 +42,19 @@ Once you start using `stampver` you will be able to copy the `version.json5` fil
 The command line tool `stampver` is included in this crate using the `cli` feature flag, which is installed by default.
 
 ```text
-USAGE:
-    stampver [OPTIONS] [OPERATION]
+A tool for updating project version numbers
 
-ARGS:
-    <OPERATION>    The versioning operation to perform
+Usage: stampver [OPTIONS] [OPERATION]
 
-OPTIONS:
-    -h, --help                  Print help information
-    -i, --input <INPUT_FILE>    Specify the version file explicitly
-    -u, --update                Actually do the update
-    -V, --version               Print version information
+Arguments:
+  [OPERATION]  The versioning operation to perform
+
+Options:
+    -i, --input <INPUT_FILE>  Specify the version file explicitly
+    -u, --update              Actually do the update
+    -f, --filter <DIR_PATH>   Filter output to update only files under this directory
+    -h, --help                Print help information
+    -V, --version             Print version information
 ```
 
 The tool will describe the actions that it is taking on each file so you can check that it is doing what you expect.
