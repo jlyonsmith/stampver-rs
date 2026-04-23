@@ -71,7 +71,14 @@ pub fn run() -> anyhow::Result<i32> {
     let (content, root_node, script_file) = tool
         .read_script_file(cli.input_file)
         .context("failed to read script file")?;
-    let filter_paths = tool.validate_filter_paths(&cli.filter_path)?;
+    let filter_paths = tool.validate_filter_paths(&cli.filter_path, &script_file)?;
+
+    for filter_path in filter_paths.iter() {
+        log::info!(
+            "Filtering output to files under '{}'",
+            filter_path.display()
+        );
+    }
 
     let inner_run = || {
         tool.validate_script_file(&root_node)?;

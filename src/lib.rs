@@ -48,29 +48,39 @@ impl StampVerTool {
     pub fn validate_filter_paths(
         self: &Self,
         filter_paths: &Vec<PathBuf>,
+        script_file: &Path,
     ) -> anyhow::Result<Vec<PathBuf>> {
         let mut cleaned_filter_paths = vec![];
 
-        for filter_path in filter_paths.iter() {
-            let mut path = if filter_path.is_relative() {
-                std::env::current_dir()?.join(filter_path)
-            } else {
-                filter_path.clone()
-            };
+        if filter_paths.len() == 0 {
+            cleaned_filter_paths.push(
+                script_file
+                    .parent()
+                    .context("Failed to get parent directory of script file")?
+                    .to_path_buf(),
+            );
+        } else {
+            for filter_path in filter_paths.iter() {
+                let mut path = if filter_path.is_relative() {
+                    std::env::current_dir()?.join(filter_path)
+                } else {
+                    filter_path.clone()
+                };
 
-            path = path.canonicalize().context(format!(
-                "Failed to canonicalize filter path '{}'",
-                path.display()
-            ))?;
-
-            if !path.is_dir() {
-                return Err(anyhow::anyhow!(
-                    "Filter path '{}' is not a directory",
+                path = path.canonicalize().context(format!(
+                    "Failed to canonicalize filter path '{}'",
                     path.display()
-                ));
-            }
+                ))?;
 
-            cleaned_filter_paths.push(path);
+                if !path.is_dir() {
+                    return Err(anyhow::anyhow!(
+                        "Filter path '{}' is not a directory",
+                        path.display()
+                    ));
+                }
+
+                cleaned_filter_paths.push(path);
+            }
         }
 
         Ok(cleaned_filter_paths)
