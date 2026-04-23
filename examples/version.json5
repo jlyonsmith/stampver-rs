@@ -52,12 +52,12 @@
     },
     {
       description: "Git version tag commit message",
-      files: ["../scratch/version.desc.txt"],
+      files: ["version.desc.txt"],
       write: '"Version" + str::from(major) + "." + str::from(minor) + "." + str::from(patch) + "+" + str::from(build) + "." + str::from(revision)',
     },
     {
       description: "Google Firebase",
-      files: ["../scratch/some-file.plist"],
+      files: ["some-file.plist"],
       copyFrom: '"some-file" + if(buildType == "test", "-test", "-prod") + ".plist"',
     },
   ],
